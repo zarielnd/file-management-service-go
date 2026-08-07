@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+package storage.v1;
+
+option go_package = "gen/storage/v1";
+
+service StorageService {
+
+  rpc UploadFile(UploadFileRequest)
+      returns (UploadFileResponse);
+
+  rpc GetFile(GetFileRequest)
+      returns (stream FileChunk);
+
+  rpc GetMetadata(GetMetadataRequest)
+      returns (FileMetadata);
+
+  rpc ListFiles(ListFilesRequest)
+      returns (ListFilesResponse);
+
+  rpc DownloadArchive(DownloadArchiveRequest)
+      returns (stream FileChunk);
+}
+
+
+// ========================
+// Upload
+// ========================
+
+message UploadFileRequest {
+  string filename = 1;
+  string content_type = 2;
+  bytes data = 3;
+}
+
+
+message UploadFileResponse {
+  FileMetadata file = 1;
+}
+
+
+// ========================
+// Download single file
+// ========================
+
+message GetFileRequest {
+  string id = 1;
+}
+
+
+message FileChunk {
+  bytes data = 1;
+}
+
+
+// ========================
+// Metadata
+// ========================
+
+message GetMetadataRequest {
+  string id = 1;
+}
+
+
+message FileMetadata {
+  string id = 1;
+  string name = 2;
+  int64 size = 3;
+  string content_type = 4;
+  string created_at = 5;
+}
+
+
+// ========================
+// List files
+// ========================
+
+message ListFilesRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+}
+
+
+message ListFilesResponse {
+  repeated FileMetadata files = 1;
+  int32 total = 2;
+}
+
+
+// ========================
+// Download multiple files
+// ========================
+
+message DownloadArchiveRequest {
+  repeated string file_ids = 1;
+}

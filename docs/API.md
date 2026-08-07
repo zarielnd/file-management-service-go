@@ -364,7 +364,6 @@ The File Server is responsible for:
 - Request validation
 - Multipart parsing
 - HTTP response formatting
-- ZIP generation for multi-file downloads
 - Communication with the Storage Service
 
 The Storage Service is responsible for:

@@ -3,21 +3,34 @@ package main
 import (
 	"log"
 	"net/http"
+
+	"github.com/zarielnd/file-management-service-go/services/file-server/internal/handler"
 )
 
-func main() {
+func main(){
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	})
+	fileHandler := handler.NewFileHandler()
+	healthHandler := handler.NewHealthHandler()
 
-	addr := ":8080"
+	// Health
+	mux.HandleFunc("GET /health", healthHandler.Health)
 
-	log.Printf("HTTP server listening on %s", addr)
+	// Files
+	mux.HandleFunc("POST /files", fileHandler.Upload)
+	mux.HandleFunc("GET /files", fileHandler.List)
+	mux.HandleFunc("GET /files/{id}", fileHandler.Download)
+	mux.HandleFunc("POST /files/download", fileHandler.DownloadMultiple)
+	mux.HandleFunc("GET /files/{id}/metadata", fileHandler.Metadata)
 
-	if err := http.ListenAndServe(addr, mux); err != nil {
-		log.Fatal(err)
+	server := &http.Server{
+		Addr:    ":8080",
+		Handler: mux,
+	}
+
+	log.Println("file-server running on :8080")
+
+	if err := server.ListenAndServe(); err != nil {
+		log.Fatalf("failed to start server: %v", err)
 	}
 }
