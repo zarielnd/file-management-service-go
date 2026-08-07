@@ -17,7 +17,6 @@ The initial version focuses on synchronous REST APIs. Workflow orchestration usi
 - Upload multiple files
 - Download a single file
 - Download multiple files as a ZIP archive
-- Delete file(s)
 - List uploaded files
 - Retrieve file metadata
 

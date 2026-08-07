@@ -1,0 +1,89 @@
+# =========================
+# Go
+# =========================
+
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go build output
+bin/
+build/
+dist/
+
+# Coverage
+coverage.out
+coverage.html
+*.coverprofile
+
+# Go workspace
+go.work.sum
+
+
+# =========================
+# IDE / Editors
+# =========================
+
+# VS Code
+.vscode/
+
+# GoLand / IntelliJ
+.idea/
+*.iml
+
+# Vim
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+
+# =========================
+# Environment / Secrets
+# =========================
+
+.env
+.env.*
+!.env.example
+
+*.pem
+*.key
+*.crt
+
+
+# =========================
+# Logs
+# =========================
+
+*.log
+logs/
+
+
+# =========================
+# Temporary files
+# =========================
+
+tmp/
+temp/
+*.tmp
+
+
+# =========================
+# Docker
+# =========================
+
+docker-compose.override.yml
+
+
+# =========================
+# Generated files
+# =========================
+
+# Uncomment if protobuf files are generated during build
+# proto/**/*.pb.go
