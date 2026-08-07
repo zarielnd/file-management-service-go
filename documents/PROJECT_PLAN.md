@@ -103,14 +103,14 @@ Stores metadata including:
 
 ## 5. API Design
 
-| Method | Endpoint               | Description                    |
-| ------ | ---------------------- | ------------------------------ |
-| POST   | `/files`               | Upload one or more files       |
-| GET    | `/files`               | List uploaded files            |
-| GET    | `/files/{id}`          | Download a single file         |
-| POST   | `/files/download`      | Download multiple files as ZIP |
-| DELETE | `/files`               | Delete one or more files       |
-| GET    | `/files/{id}/metadata` | Retrieve file metadata         |
+| Method | Endpoint               | Description                      |
+| ------ | ---------------------- | -------------------------------- |
+| POST   | `/files`               | Upload one or more files         |
+| GET    | `/files`               | List uploaded files              |
+| GET    | `/files/{id}`          | Download a single file           |
+| POST   | `/files/download`      | Download multiple files as ZIP   |
+| GET    | `/files/{id}/metadata` | Retrieve file metadata           |
+| GET    | `/health`              | Report that the service is alive |
 
 ---
 
@@ -118,6 +118,7 @@ Stores metadata including:
 
 | Milestone                             | Deliverables                                                                                                                    |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **Milestone 0 = Prepare API**         | Prepare API specification                                                                                                       |
 | **Milestone 1 – Project Setup**       | Initialize project structure, Docker environment, PostgreSQL, database migrations, Protobuf definitions, and gRPC communication |
 | **Milestone 2 – Core Implementation** | Implement file upload, download, deletion, metadata persistence, and local file storage                                         |
 | **Milestone 3 – Finalization**        | Complete REST API, Swagger documentation, testing, logging, and project documentation                                           |
