@@ -1,81 +1,55 @@
-.PHONY: all help build test test-race fmt vet lint proto \
-        migrate migrate-down migrate-version \
+.PHONY: all build test test-race fmt vet proto \
         docker-up docker-up-build docker-down docker-down-volumes \
         docker-build clean
 
-# Services matching your directory names under services/
 SERVICES := file-server storage
+
+# =============================================================================
+# Build
+# =============================================================================
+
+build: ## Build all service binaries into bin/
+	@mkdir -p bin
+	go build -o bin/file-server ./services/file-server/cmd
+	go build -o bin/storage ./services/storage/cmd
 
 # =============================================================================
 # Development
 # =============================================================================
 
-all: fmt vet proto build test
-
-help: ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
-
-build: ## Build service binaries into bin/
-	@mkdir -p bin
-	@for service in $(SERVICES); do \
-		echo "Building $$service..."; \
-		go build -o bin/$$service ./services/$$service/cmd/... ; \
-	done
-
-test: ## Run unit tests for all services
-	@for service in $(SERVICES); do \
-		echo "Testing $$service..."; \
-		(cd services/$$service && go test ./...); \
-	done
+test: ## Run tests for all services
+	go test ./services/...
 
 test-race: ## Run tests with race detector
-	@for service in $(SERVICES); do \
-		echo "Testing $$service with race detector..."; \
-		(cd services/$$service && go test -race ./...); \
-	done
+	go test -race ./services/...
 
-fmt: ## Format Go code
-	@for service in $(SERVICES); do \
-		(cd services/$$service && go fmt ./...); \
-	done
+fmt: ## Format all Go code
+	go fmt ./services/...
 
-vet: ## Run go vet
-	@for service in $(SERVICES); do \
-		echo "Vetting $$service..."; \
-		(cd services/$$service && go vet ./...); \
-	done
+vet: ## Run go vet on all services
+	go vet ./services/...
 
-lint: ## Run golangci-lint (install if missing: https://golangci-lint.run/)
-	@for service in $(SERVICES); do \
-		echo "Linting $$service..."; \
-		(cd services/$$service && golangci-lint run ./...); \
-	done
+lint: ## Run golangci-lint
+	golangci-lint run ./services/...
 
 # =============================================================================
 # Code Generation
 # =============================================================================
 
 proto: ## Generate Go code from protobuf definitions
-	buf generate proto
-
-# =============================================================================
-# Database
-# =============================================================================
-
-migrate: ## Run migrations up
-	./scripts/migrate.sh up
-
-migrate-down: ## Run migrations down
-	./scripts/migrate.sh down
-
-migrate-version: ## Check migration version
-	./scripts/migrate.sh version
+	protoc \
+		--proto_path=proto \
+		--go_out=gen \
+		--go_opt=paths=source_relative \
+		--go-grpc_out=gen \
+		--go-grpc_opt=paths=source_relative \
+		storage/v1/storage.proto
 
 # =============================================================================
 # Docker
 # =============================================================================
 
-docker-up: ## Start docker compose in foreground
+docker-up: ## Start docker compose
 	docker compose up
 
 docker-up-build: ## Build and start docker compose

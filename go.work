@@ -1,3 +1,7 @@
 go 1.26.5
 
-use ./services/file-server
+use (
+	./gen
+	./services/file-server
+	./services/storage
+)

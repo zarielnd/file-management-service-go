@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strconv"
@@ -28,6 +29,10 @@ func NewFileHandler(fileService fileService) *FileHandler {
 	return &FileHandler{
 		service: fileService,
 	}
+}
+
+type downloadMultipleRequest struct {
+	IDs []string `json:"file_ids"`
 }
 
 func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request){
@@ -114,13 +119,18 @@ func (h *FileHandler) List(w http.ResponseWriter, r *http.Request){
 }
 
 func (h *FileHandler) DownloadMultiple(w http.ResponseWriter, r *http.Request){
-	ids := r.URL.Query()["id"]
-	if len(ids) == 0 {
-		httpx.WriteError(w, apperror.Invalid("no file IDs provided"))
+	var req downloadMultipleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httpx.WriteError(w, apperror.Invalid("invalid JSON body"))
 		return
 	}
 
-	reader, err := h.service.DownloadMultiple(r.Context(), ids)
+	if len(req.IDs) == 0 {
+		httpx.WriteError(w, apperror.Invalid("file_ids cannot be empty"))
+		return
+	}
+
+	reader, err := h.service.DownloadMultiple(r.Context(), req.IDs)
 	if err != nil {
 		httpx.WriteError(w, err)
 		return

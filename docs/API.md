@@ -164,7 +164,7 @@ GET /files?page=1&page_size=20
 
 # 3. Download a File
 
-## `GET /files/{id}`
+## `GET /files/{id}/download/`
 
 Downloads the file associated with the specified ID.
 
@@ -202,7 +202,7 @@ The response body contains the raw binary file content.
 
 # 4. Download Multiple Files
 
-## `POST /files/download`
+## `POST /files/downloads`
 
 Downloads multiple files as a ZIP archive.
 

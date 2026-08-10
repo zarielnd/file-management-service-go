@@ -106,7 +106,7 @@ Stores metadata including:
 | ------ | ---------------------- | -------------------------------- |
 | POST   | `/files`               | Upload one or more files         |
 | GET    | `/files`               | List uploaded files              |
-| GET    | `/files/{id}`          | Download a single file           |
+| GET    | `/files/{id}/download` | Download a single file           |
 | POST   | `/files/download`      | Download multiple files as ZIP   |
 | GET    | `/files/{id}/metadata` | Retrieve file metadata           |
 | GET    | `/health`              | Report that the service is alive |

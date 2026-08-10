@@ -9,20 +9,21 @@ import (
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/domain"
 )
 
-const maxFileSize = 10 * 1024 * 1024
 
 type FileService struct {
 	storageClient client.StorageClient
+	maxFileSize int64
 }
 
-func NewFileService(storageClient client.StorageClient) *FileService {
+func NewFileService(storageClient client.StorageClient, maxFileSize int64) *FileService {
 	return &FileService{
 		storageClient: storageClient,
+		maxFileSize: maxFileSize,
 	}
 }
 
 func (s * FileService) Upload(ctx context.Context, input client.UploadInput) (domain.File, error) {
-	if input.Size > maxFileSize {
+	if input.Size > s.maxFileSize {
 		return domain.File{}, apperror.Invalid("file size exceeds the maximum limit")
 	}
 

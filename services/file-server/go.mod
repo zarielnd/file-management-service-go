@@ -2,7 +2,11 @@ module github.com/zarielnd/file-management-service-go/services/file-server
 
 go 1.26.5
 
-require github.com/zarielnd/file-management-service-go/gen v0.0.0
+require (
+	github.com/google/uuid v1.6.0
+	github.com/zarielnd/file-management-service-go/gen v0.0.0
+	github.com/joho/godotenv v1.5.1
+)
 
 require (
 	golang.org/x/net v0.56.0 // indirect
@@ -13,4 +17,4 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-replace github.com/zarielnd/file-management-go/gen => ../../gen
+replace github.com/zarielnd/file-management-service-go/gen => ../../gen
