@@ -5,13 +5,23 @@ import (
 	"net/http"
 
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/handler"
+	"github.com/zarielnd/file-management-service-go/services/file-server/internal/service"
 )
 
 func main(){
-	mux := http.NewServeMux()
 
-	fileHandler := handler.NewFileHandler()
+	storageClient, closeConn, err := grpclient.NewStorageClient("localhost:50051")
+	if err != nil {
+		log.Fatalf("failed to connect to storage service: %v", err)
+	}
+	defer closeConn()
+
+	fileSvc := service.NewFileService(storageClient)
+
+	fileHandler := handler.NewFileHandler(fileSvc)
 	healthHandler := handler.NewHealthHandler()
+
+	mux := http.NewServeMux()
 
 	// Health
 	mux.HandleFunc("GET /health", healthHandler.Health)
