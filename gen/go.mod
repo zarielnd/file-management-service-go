@@ -1,4 +1,4 @@
-module github.com/zarielnd/file-management-go/gen
+module github.com/zarielnd/file-management-service-go/gen
 
 go 1.26.5
 

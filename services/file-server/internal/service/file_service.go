@@ -9,7 +9,7 @@ import (
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/domain"
 )
 
-const maxFileSize = 100 * 1024 * 1024
+const maxFileSize = 10 * 1024 * 1024
 
 type FileService struct {
 	storageClient client.StorageClient

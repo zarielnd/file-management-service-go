@@ -2,7 +2,7 @@ module github.com/zarielnd/file-management-service-go/services/file-server
 
 go 1.26.5
 
-require github.com/zarielnd/file-management-go/gen v0.0.0
+require github.com/zarielnd/file-management-service-go/gen v0.0.0
 
 require (
 	golang.org/x/net v0.56.0 // indirect
