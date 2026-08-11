@@ -19,11 +19,15 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid MAX_UPLOAD_SIZE: %v", err)
 	}
+	maxMem, err := parseBytes(getEnv("MAX_MULTIPART_MEMORY", fmt.Sprintf("%d", 32*1024*1024))) // Default to 32 MB
+	if err != nil {
+		return nil, fmt.Errorf("invalid MAX_MULTIPART_MEMORY: %w", err)
+	}
 	return &Config{
 		ServerPort: getEnv("SERVER_PORT", "8080"),
 		StorageGRPCTarget: getEnv("STORAGE_GRPC_TARGET", "localhost:50051"),
 		MaxUploadSize: maxSize,
-		MaxMultipartMemory: 32 << 20, // 32 MB
+		MaxMultipartMemory: maxMem,
 	}, nil
 }
 

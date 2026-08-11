@@ -23,11 +23,13 @@ type fileService interface {
 
 type FileHandler struct {
 	service fileService
+	maxMultipartMemory int64
 }
 
-func NewFileHandler(fileService fileService) *FileHandler {
+func NewFileHandler(fileService fileService, maxMultipartMemory int64) *FileHandler {
 	return &FileHandler{
 		service: fileService,
+		maxMultipartMemory: maxMultipartMemory,
 	}
 }
 
@@ -36,7 +38,7 @@ type downloadMultipleRequest struct {
 }
 
 func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request){
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
+	if err := r.ParseMultipartForm(h.maxMultipartMemory); err != nil {
 		httpx.WriteError(w, apperror.Invalid("invalid multipart form"))
 		return
 	}

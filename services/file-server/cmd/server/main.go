@@ -28,7 +28,7 @@ func main(){
 
 	fileSvc := service.NewFileService(storageClient, config.MaxUploadSize)
 
-	fileHandler := handler.NewFileHandler(fileSvc)
+	fileHandler := handler.NewFileHandler(fileSvc, config.MaxMultipartMemory)
 	healthHandler := handler.NewHealthHandler()
 
 	mux := http.NewServeMux()

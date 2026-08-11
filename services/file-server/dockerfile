@@ -1,21 +1,47 @@
-FROM golang:1.24-alpine AS builder
+# syntax=docker/dockerfile:1
 
-WORKDIR /app
+# ============================
+# Build stage
+# ============================
+FROM golang:1.26.5-alpine AS builder
 
-COPY go.mod go.sum ./
+ARG TARGETOS
+ARG TARGETARCH
+
+WORKDIR /build
+
+# Install git for module fetching
+RUN apk add --no-cache git ca-certificates
+
+ENV GOWORK=off
+COPY gen/ ./gen/
+
+# Copy file-server module files
+COPY services/file-server/go.mod services/file-server/go.sum ./services/file-server/
+WORKDIR /build/services/file-server
+
+# Download dependencies
 RUN go mod download
 
-COPY . .
+# Copy file-server source
+COPY services/file-server/ .
 
-RUN go build -o /bin/http-server ./cmd/server
+# Build binary
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="-w -s" -o /bin/file-server ./cmd/server \
+    && chmod +x /bin/file-server
 
-
-FROM alpine:3.22
+# ============================
+# Final stage
+# ============================
+FROM gcr.io/distroless/static-debian12:nonroot
 
 WORKDIR /app
 
-COPY --from=builder /bin/http-server .
+COPY --from=builder /bin/file-server /app/file-server
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 EXPOSE 8080
 
-CMD ["./http-server"]
+USER nonroot:nonroot
+
+ENTRYPOINT ["/app/file-server"]

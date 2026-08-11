@@ -4,8 +4,8 @@ go 1.26.5
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/zarielnd/file-management-service-go/gen v0.0.0
 	github.com/joho/godotenv v1.5.1
+	github.com/zarielnd/file-management-service-go/gen v0.0.0
 )
 
 require (
