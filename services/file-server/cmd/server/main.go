@@ -7,7 +7,8 @@ import (
 
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/client/grpc"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/config"
-	"github.com/zarielnd/file-management-service-go/services/file-server/internal/handler"
+	"github.com/zarielnd/file-management-service-go/services/file-server/internal/handler/file"
+	"github.com/zarielnd/file-management-service-go/services/file-server/internal/handler/health"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/service"
 )
 
@@ -26,8 +27,8 @@ func main(){
 
 	fileSvc := service.NewFileService(storageClient, config.MaxUploadSize)
 
-	fileHandler := handler.NewFileHandler(fileSvc, config.MaxMultipartMemory)
-	healthHandler := handler.NewHealthHandler()
+	fileHandler := file.NewFileHandler(fileSvc, config.MaxMultipartMemory)
+	healthHandler := health.NewHealthHandler()
 
 	mux := http.NewServeMux()
 

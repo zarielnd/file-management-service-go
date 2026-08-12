@@ -20,5 +20,4 @@ type Repository interface {
 	GetByID(ctx context.Context, id string) (*File, error)
 	GetByIDs(ctx context.Context, ids []string) ([]File, error)
 	List(ctx context.Context, limit, offset int) ([]*File, int, error)
-	
 }
