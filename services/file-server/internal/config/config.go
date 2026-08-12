@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+
+	"github.com/joho/godotenv"
 )
 
 type Config struct {
@@ -14,6 +16,7 @@ type Config struct {
 }
 
 func Load() (*Config, error) {
+	godotenv.Load("../../.env")
 
 	maxSize, err := parseBytes(getEnv("MAX_UPLOAD_SIZE", fmt.Sprintf("%d", 10*1024*1024))) // Default to 10 MB
 	if err != nil {

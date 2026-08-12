@@ -37,38 +37,42 @@ type downloadMultipleRequest struct {
 	IDs []string `json:"file_ids"`
 }
 
-func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request){
+func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(h.maxMultipartMemory); err != nil {
 		httpx.WriteError(w, apperror.Invalid("invalid multipart form"))
 		return
 	}
 
-	files := r.MultipartForm.File["file"]
+	files := r.MultipartForm.File["files"]
 	if len(files) == 0 {
-		httpx.WriteError(w, apperror.Invalid("no file provided"))
+		httpx.WriteError(w, apperror.Invalid("no files provided"))
 		return
 	}
 
-	fh := files[0]
-	file, err := fh.Open()
-	if err != nil {
-		httpx.WriteError(w, apperror.Internal("failed to open uploaded file"))
-		return
-	}
-	defer file.Close()
+	var results []domain.File
+	for _, fh := range files {
+		file, err := fh.Open()
+		if err != nil {
+			httpx.WriteError(w, apperror.Internal("failed to open upload"))
+			return
+		}
 
-	result, err := h.service.Upload(r.Context(), client.UploadInput{
-		Name:        fh.Filename,
-		ContentType: fh.Header.Get("Content-Type"),
-		Size:        fh.Size,
-		Content:     file,
-	})
-	if err != nil {
-		httpx.WriteError(w, err)
-		return
+		result, err := h.service.Upload(r.Context(), client.UploadInput{
+			Name:        fh.Filename,
+			ContentType: fh.Header.Get("Content-Type"),
+			Size:        fh.Size,
+			Content:     file,
+		})
+		file.Close()
+
+		if err != nil {
+			httpx.WriteError(w, err)
+			return
+		}
+		results = append(results, result)
 	}
 
-	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"file": result})
+	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"files": results})
 }
 
 func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request){

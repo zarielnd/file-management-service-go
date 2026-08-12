@@ -1,4 +1,4 @@
-package server
+package main
 
 import (
 	"log"
@@ -11,6 +11,8 @@ import (
 	"github.com/zarielnd/file-management-service-go/services/storage/internal/service"
 	"github.com/zarielnd/file-management-service-go/services/storage/internal/storage/local"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 func main() {
@@ -36,6 +38,11 @@ func main() {
 	}
 
 	s := grpc.NewServer()
+
+	healthServer := health.NewServer()
+	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
+	grpc_health_v1.RegisterHealthServer(s, healthServer)
+
 	storagev1.RegisterStorageServiceServer(s, grpcServer)
 
 	log.Printf("storage service running on :%s", cfg.GRPCPort)

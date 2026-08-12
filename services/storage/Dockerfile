@@ -11,9 +11,13 @@ ARG TARGETARCH
 WORKDIR /build
 
 # Install build dependencies
-RUN apk add --no-cache git ca-certificates
+RUN apk add --no-cache git ca-certificates wget
 
 ENV GOWORK=off
+
+RUN GRPC_HEALTH_PROBE_VERSION=v0.4.24 && \
+    wget -qO/bin/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-amd64 && \
+    chmod +x /bin/grpc_health_probe
 
 COPY gen/ ./gen/
 COPY services/storage/go.mod services/storage/go.sum ./services/storage/
@@ -38,6 +42,8 @@ WORKDIR /app
 
 # Copy binary
 COPY --from=builder /bin/storage-server /app/storage-server
+
+COPY --from=builder /bin/grpc_health_probe /app/grpc_health_probe
 
 # Copy migrations (needed if you run migrate from entrypoint)
 COPY --from=builder /build/services/storage/db/migrations /app/db/migrations

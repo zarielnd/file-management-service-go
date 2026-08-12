@@ -38,6 +38,12 @@ services:
       DATABASE_URL: "${DATABASE_URL}"
     volumes:
       - file-data:/data
+    healthcheck:
+      test: ["CMD", "/app/grpc_health_probe", "-addr=:50051"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
     depends_on:
       migrate:
         condition: service_completed_successfully

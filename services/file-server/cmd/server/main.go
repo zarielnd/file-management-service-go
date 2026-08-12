@@ -5,22 +5,20 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/joho/godotenv"
-	"github.com/zarielnd/file-management-service-go/services/file-server/internal/client/stub"
+	"github.com/zarielnd/file-management-service-go/services/file-server/internal/client/grpc"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/config"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/handler"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/service"
 )
 
 func main(){
-	_ = godotenv.Load(".env")
 
 	config, err := config.Load()
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
-	storageClient, closeConn, err := stub.NewStorageClient(config.StorageGRPCTarget)
+	storageClient, closeConn, err := grpc.NewStorageClient(config.StorageGRPCTarget)
 	if err != nil {
 		log.Fatalf("failed to connect to storage service: %v", err)
 	}
@@ -48,12 +46,11 @@ func main(){
 		Handler: stripTrailingSlash(mux),
 	}
 
+	log.Println("file-server running on " + config.ServerPort)
+
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("failed to start server: %v", err)
 	}
-
-	log.Println("file-server running on " + config.ServerPort)
-
 }
 
 func stripTrailingSlash(next http.Handler) http.Handler {

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/zarielnd/file-management-service-go/services/storage/internal/repository"
 )
 
@@ -15,7 +16,7 @@ type Repository struct {
 }
 
 func NewRepository(connString string) (*Repository, error) {
-	db, err := sql.Open("postgres", connString)
+	db, err := sql.Open("pgx", connString)
 	if err != nil {
 		return nil, err
 	}
