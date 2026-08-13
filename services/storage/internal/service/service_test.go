@@ -16,103 +16,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/zarielnd/file-management-service-go/services/storage/internal/repository"
+	repomock "github.com/zarielnd/file-management-service-go/services/storage/internal/repository/mock"
+	storagemock "github.com/zarielnd/file-management-service-go/services/storage/internal/storage/mock"
 )
-
-// ---------------------------------------------------------------------------
-// fakeRepository / fakeStorageProvider: hand-written fakes for the
-// repository.Repository and storage.Provider interfaces. The module has no
-// testify/gomock dependency, so these stay dependency-free.
-//
-// IMPORTANT (reader lifecycle): FileService.Store passes an io.TeeReader
-// wrapping the caller's reader and a sha256 hasher into storage.Store. The
-// checksum is only correct if whatever reads storagePath's reader actually
-// drains it - exactly like the real local.Store implementation does via
-// io.Copy. fakeStorageProvider.Store therefore reads the reader eagerly with
-// io.ReadAll, both to compute a correct byte count and to drive the TeeReader
-// side effect that produces the SHA-256 checksum FileService.Store computes
-// afterwards.
-// ---------------------------------------------------------------------------
-
-type storeCall struct {
-	Path    string
-	Content []byte
-}
-
-type fakeStorageProvider struct {
-	storeCalls []storeCall
-	storeFunc  func(path string, content []byte) (int64, error)
-
-	fetchCalls []string
-	fetchFunc  func(path string) (io.ReadCloser, error)
-}
-
-func (p *fakeStorageProvider) Store(ctx context.Context, path string, reader io.Reader) (int64, error) {
-	content, err := io.ReadAll(reader)
-	if err != nil {
-		return 0, err
-	}
-	p.storeCalls = append(p.storeCalls, storeCall{Path: path, Content: content})
-	if p.storeFunc != nil {
-		return p.storeFunc(path, content)
-	}
-	return int64(len(content)), nil
-}
-
-func (p *fakeStorageProvider) Fetch(ctx context.Context, path string) (io.ReadCloser, error) {
-	p.fetchCalls = append(p.fetchCalls, path)
-	if p.fetchFunc != nil {
-		return p.fetchFunc(path)
-	}
-	return io.NopCloser(strings.NewReader("")), nil
-}
-
-type listCall struct{ Limit, Offset int }
-
-type fakeRepository struct {
-	createCalls []repository.File
-	createFunc  func(file *repository.File) error
-
-	getByIDCalls []string
-	getByIDFunc  func(id string) (*repository.File, error)
-
-	getByIDsCalls [][]string
-	getByIDsFunc  func(ids []string) ([]repository.File, error)
-
-	listCalls []listCall
-	listFunc  func(limit, offset int) ([]*repository.File, int, error)
-}
-
-func (r *fakeRepository) Create(ctx context.Context, file *repository.File) error {
-	r.createCalls = append(r.createCalls, *file)
-	if r.createFunc != nil {
-		return r.createFunc(file)
-	}
-	return nil
-}
-
-func (r *fakeRepository) GetByID(ctx context.Context, id string) (*repository.File, error) {
-	r.getByIDCalls = append(r.getByIDCalls, id)
-	if r.getByIDFunc != nil {
-		return r.getByIDFunc(id)
-	}
-	return &repository.File{}, nil
-}
-
-func (r *fakeRepository) GetByIDs(ctx context.Context, ids []string) ([]repository.File, error) {
-	r.getByIDsCalls = append(r.getByIDsCalls, ids)
-	if r.getByIDsFunc != nil {
-		return r.getByIDsFunc(ids)
-	}
-	return nil, nil
-}
-
-func (r *fakeRepository) List(ctx context.Context, limit, offset int) ([]*repository.File, int, error) {
-	r.listCalls = append(r.listCalls, listCall{limit, offset})
-	if r.listFunc != nil {
-		return r.listFunc(limit, offset)
-	}
-	return nil, 0, nil
-}
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -128,7 +34,7 @@ func sha256Hex(data []byte) string {
 // legitimately stages a zip file on local disk before returning it (that's
 // the production design, not a mock boundary), so tests exercise that with a
 // throwaway directory rather than faking os.CreateTemp/os.Open.
-func newService(t *testing.T, repo *fakeRepository, storage *fakeStorageProvider) *FileService {
+func newService(t *testing.T, repo *repomock.Repository, storage *storagemock.Provider) *FileService {
 	t.Helper()
 	dir := t.TempDir()
 	return NewFileService(repo, storage, dir, dir)
@@ -152,8 +58,8 @@ func archiveFilesRemaining(t *testing.T, dir string) int {
 // ---------------------------------------------------------------------------
 
 func TestFileService_Store_Success(t *testing.T) {
-	repo := &fakeRepository{}
-	storage := &fakeStorageProvider{}
+	repo := &repomock.Repository{}
+	storage := &storagemock.Provider{}
 	svc := newService(t, repo, storage)
 
 	content := []byte("hello world, this is file content")
@@ -203,32 +109,25 @@ func TestFileService_Store_Success(t *testing.T) {
 	}
 
 	// storage.Provider received the exact bytes at the sharded path.
-	if len(storage.storeCalls) != 1 {
-		t.Fatalf("storage.Store called %d times, want 1", len(storage.storeCalls))
+	if len(storage.StoredPaths) != 1 || storage.StoredPaths[0] != wantPath {
+		t.Fatalf("storage.Store paths = %v, want [%q]", storage.StoredPaths, wantPath)
 	}
-	if storage.storeCalls[0].Path != wantPath {
-		t.Errorf("storage.Store path = %q, want %q", storage.storeCalls[0].Path, wantPath)
-	}
-	if !bytes.Equal(storage.storeCalls[0].Content, content) {
-		t.Errorf("storage.Store content = %q, want %q", storage.storeCalls[0].Content, content)
+	if !bytes.Equal(storage.StoredContent[wantPath], content) {
+		t.Errorf("storage.Store content = %q, want %q", storage.StoredContent[wantPath], content)
 	}
 
 	// repo.Create received the same file that was returned.
-	if len(repo.createCalls) != 1 {
-		t.Fatalf("repo.Create called %d times, want 1", len(repo.createCalls))
+	if repo.CreatedFile == nil {
+		t.Fatalf("repo.Create was not called")
 	}
-	if repo.createCalls[0] != got {
-		t.Errorf("repo.Create received %+v, want %+v", repo.createCalls[0], got)
+	if *repo.CreatedFile != got {
+		t.Errorf("repo.Create received %+v, want %+v", *repo.CreatedFile, got)
 	}
 }
 
 func TestFileService_Store_StorageError(t *testing.T) {
-	repo := &fakeRepository{}
-	storage := &fakeStorageProvider{
-		storeFunc: func(path string, content []byte) (int64, error) {
-			return 0, errors.New("disk full")
-		},
-	}
+	repo := &repomock.Repository{}
+	storage := &storagemock.Provider{StoreErr: errors.New("disk full")}
 	svc := newService(t, repo, storage)
 
 	_, err := svc.Store(context.Background(), "f.txt", "text/plain", bytes.NewReader([]byte("x")))
@@ -242,18 +141,14 @@ func TestFileService_Store_StorageError(t *testing.T) {
 	if !strings.Contains(err.Error(), "disk full") {
 		t.Errorf("error = %q, want it to wrap the underlying %q", err.Error(), "disk full")
 	}
-	if len(repo.createCalls) != 0 {
-		t.Errorf("repo.Create called %d times, want 0", len(repo.createCalls))
+	if repo.CreatedFile != nil {
+		t.Errorf("repo.Create was called, want not called")
 	}
 }
 
 func TestFileService_Store_RepositoryError(t *testing.T) {
-	repo := &fakeRepository{
-		createFunc: func(file *repository.File) error {
-			return errors.New("unique violation")
-		},
-	}
-	storage := &fakeStorageProvider{}
+	repo := &repomock.Repository{Err: errors.New("unique violation")}
+	storage := &storagemock.Provider{}
 	svc := newService(t, repo, storage)
 
 	got, err := svc.Store(context.Background(), "f.txt", "text/plain", bytes.NewReader([]byte("x")))
@@ -272,8 +167,8 @@ func TestFileService_Store_RepositoryError(t *testing.T) {
 	}
 	// The underlying storage write is not rolled back on a repo failure -
 	// documenting current behavior, not asserting it's desirable.
-	if len(storage.storeCalls) != 1 {
-		t.Errorf("storage.Store called %d times, want 1 (write happens before repo.Create)", len(storage.storeCalls))
+	if len(storage.StoredPaths) != 1 {
+		t.Errorf("storage.Store called %d times, want 1 (write happens before repo.Create)", len(storage.StoredPaths))
 	}
 }
 
@@ -285,17 +180,8 @@ func TestFileService_Fetch_Success(t *testing.T) {
 	want := repository.File{ID: "abc-123", Name: "report.pdf", StoragePath: "ab/c-/abc-123/report.pdf", ContentType: "application/pdf", SizeBytes: 9}
 	body := "pdf bytes"
 
-	repo := &fakeRepository{
-		getByIDFunc: func(id string) (*repository.File, error) {
-			f := want
-			return &f, nil
-		},
-	}
-	storage := &fakeStorageProvider{
-		fetchFunc: func(path string) (io.ReadCloser, error) {
-			return io.NopCloser(strings.NewReader(body)), nil
-		},
-	}
+	repo := &repomock.Repository{File: &want}
+	storage := &storagemock.Provider{Content: map[string]string{want.StoragePath: body}}
 	svc := newService(t, repo, storage)
 
 	reader, got, err := svc.Fetch(context.Background(), "abc-123")
@@ -315,21 +201,17 @@ func TestFileService_Fetch_Success(t *testing.T) {
 		t.Errorf("Fetch() body = %q, want %q", gotBody, body)
 	}
 
-	if len(repo.getByIDCalls) != 1 || repo.getByIDCalls[0] != "abc-123" {
-		t.Errorf("repo.GetByID calls = %v, want [\"abc-123\"]", repo.getByIDCalls)
+	if repo.GetByIDArg != "abc-123" {
+		t.Errorf("repo.GetByID arg = %q, want %q", repo.GetByIDArg, "abc-123")
 	}
-	if len(storage.fetchCalls) != 1 || storage.fetchCalls[0] != want.StoragePath {
-		t.Errorf("storage.Fetch calls = %v, want [%q]", storage.fetchCalls, want.StoragePath)
+	if len(storage.FetchedPaths) != 1 || storage.FetchedPaths[0] != want.StoragePath {
+		t.Errorf("storage.Fetch calls = %v, want [%q]", storage.FetchedPaths, want.StoragePath)
 	}
 }
 
 func TestFileService_Fetch_RepositoryError(t *testing.T) {
-	repo := &fakeRepository{
-		getByIDFunc: func(id string) (*repository.File, error) {
-			return nil, errors.New("not found")
-		},
-	}
-	storage := &fakeStorageProvider{}
+	repo := &repomock.Repository{Err: errors.New("not found")}
+	storage := &storagemock.Provider{}
 	svc := newService(t, repo, storage)
 
 	reader, got, err := svc.Fetch(context.Background(), "missing")
@@ -346,22 +228,14 @@ func TestFileService_Fetch_RepositoryError(t *testing.T) {
 	if got != (repository.File{}) {
 		t.Errorf("Fetch() file = %+v, want zero value", got)
 	}
-	if len(storage.fetchCalls) != 0 {
-		t.Errorf("storage.Fetch called %d times, want 0", len(storage.fetchCalls))
+	if len(storage.FetchedPaths) != 0 {
+		t.Errorf("storage.Fetch called %d times, want 0", len(storage.FetchedPaths))
 	}
 }
 
 func TestFileService_Fetch_StorageError(t *testing.T) {
-	repo := &fakeRepository{
-		getByIDFunc: func(id string) (*repository.File, error) {
-			return &repository.File{ID: id, StoragePath: "some/path"}, nil
-		},
-	}
-	storage := &fakeStorageProvider{
-		fetchFunc: func(path string) (io.ReadCloser, error) {
-			return nil, errors.New("object not found")
-		},
-	}
+	repo := &repomock.Repository{File: &repository.File{ID: "abc-123", StoragePath: "some/path"}}
+	storage := &storagemock.Provider{FetchErr: errors.New("object not found")}
 	svc := newService(t, repo, storage)
 
 	reader, got, err := svc.Fetch(context.Background(), "abc-123")
@@ -386,13 +260,8 @@ func TestFileService_Fetch_StorageError(t *testing.T) {
 
 func TestFileService_Metadata_Success(t *testing.T) {
 	want := repository.File{ID: "abc-123", Name: "report.pdf", SizeBytes: 42}
-	repo := &fakeRepository{
-		getByIDFunc: func(id string) (*repository.File, error) {
-			f := want
-			return &f, nil
-		},
-	}
-	svc := newService(t, repo, &fakeStorageProvider{})
+	repo := &repomock.Repository{File: &want}
+	svc := newService(t, repo, &storagemock.Provider{})
 
 	got, err := svc.Metadata(context.Background(), "abc-123")
 	if err != nil {
@@ -401,18 +270,14 @@ func TestFileService_Metadata_Success(t *testing.T) {
 	if got != want {
 		t.Errorf("Metadata() = %+v, want %+v", got, want)
 	}
-	if len(repo.getByIDCalls) != 1 || repo.getByIDCalls[0] != "abc-123" {
-		t.Errorf("repo.GetByID calls = %v, want [\"abc-123\"]", repo.getByIDCalls)
+	if repo.GetByIDArg != "abc-123" {
+		t.Errorf("repo.GetByID arg = %q, want %q", repo.GetByIDArg, "abc-123")
 	}
 }
 
 func TestFileService_Metadata_RepositoryError(t *testing.T) {
-	repo := &fakeRepository{
-		getByIDFunc: func(id string) (*repository.File, error) {
-			return nil, errors.New("no rows")
-		},
-	}
-	svc := newService(t, repo, &fakeStorageProvider{})
+	repo := &repomock.Repository{Err: errors.New("no rows")}
+	svc := newService(t, repo, &storagemock.Provider{})
 
 	got, err := svc.Metadata(context.Background(), "missing")
 
@@ -451,19 +316,15 @@ func TestFileService_List_LimitOffsetArithmetic(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := &fakeRepository{}
-			svc := newService(t, repo, &fakeStorageProvider{})
+			repo := &repomock.Repository{}
+			svc := newService(t, repo, &storagemock.Provider{})
 
 			if _, _, err := svc.List(context.Background(), tt.page, tt.pageSize); err != nil {
 				t.Fatalf("List() error = %v, want nil", err)
 			}
 
-			if len(repo.listCalls) != 1 {
-				t.Fatalf("repo.List called %d times, want 1", len(repo.listCalls))
-			}
-			got := repo.listCalls[0]
-			if got.Limit != tt.wantLimit || got.Offset != tt.wantOffset {
-				t.Errorf("repo.List called with (limit=%d, offset=%d), want (limit=%d, offset=%d)", got.Limit, got.Offset, tt.wantLimit, tt.wantOffset)
+			if repo.ListLimit != tt.wantLimit || repo.ListOffset != tt.wantOffset {
+				t.Errorf("repo.List called with (limit=%d, offset=%d), want (limit=%d, offset=%d)", repo.ListLimit, repo.ListOffset, tt.wantLimit, tt.wantOffset)
 			}
 		})
 	}
@@ -471,15 +332,11 @@ func TestFileService_List_LimitOffsetArithmetic(t *testing.T) {
 
 func TestFileService_List_Success(t *testing.T) {
 	files := []*repository.File{
-		{ID: "1", Name: "a.txt"},
-		{ID: "2", Name: "b.txt"},
+		{ID: "1", Name: "a.txt", SizeBytes: 10, ContentType: "text/plain"},
+		{ID: "2", Name: "b.txt", SizeBytes: 20, ContentType: "text/plain"},
 	}
-	repo := &fakeRepository{
-		listFunc: func(limit, offset int) ([]*repository.File, int, error) {
-			return files, 2, nil
-		},
-	}
-	svc := newService(t, repo, &fakeStorageProvider{})
+	repo := &repomock.Repository{ListFiles: files, Total: 2}
+	svc := newService(t, repo, &storagemock.Provider{})
 
 	got, total, err := svc.List(context.Background(), 1, 20)
 	if err != nil {
@@ -499,12 +356,8 @@ func TestFileService_List_Success(t *testing.T) {
 }
 
 func TestFileService_List_RepositoryError(t *testing.T) {
-	repo := &fakeRepository{
-		listFunc: func(limit, offset int) ([]*repository.File, int, error) {
-			return nil, 0, errors.New("query timeout")
-		},
-	}
-	svc := newService(t, repo, &fakeStorageProvider{})
+	repo := &repomock.Repository{Err: errors.New("query timeout")}
+	svc := newService(t, repo, &storagemock.Provider{})
 
 	got, total, err := svc.List(context.Background(), 1, 20)
 
@@ -527,25 +380,16 @@ func TestFileService_List_RepositoryError(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestFileService_DownloadArchive_Success(t *testing.T) {
-	repo := &fakeRepository{
-		getByIDsFunc: func(ids []string) ([]repository.File, error) {
-			return []repository.File{
-				{ID: "1", Name: "a.txt", StoragePath: "path/a"},
-				{ID: "2", Name: "b.txt", StoragePath: "path/b"},
-			}, nil
+	repo := &repomock.Repository{
+		Files: []repository.File{
+			{ID: "1", Name: "a.txt", StoragePath: "path/a"},
+			{ID: "2", Name: "b.txt", StoragePath: "path/b"},
 		},
 	}
-	contents := map[string]string{
-		"path/a": "content of a",
-		"path/b": "content of b, a bit longer",
-	}
-	storage := &fakeStorageProvider{
-		fetchFunc: func(path string) (io.ReadCloser, error) {
-			c, ok := contents[path]
-			if !ok {
-				return nil, errors.New("unexpected path: " + path)
-			}
-			return io.NopCloser(strings.NewReader(c)), nil
+	storage := &storagemock.Provider{
+		Content: map[string]string{
+			"path/a": "content of a",
+			"path/b": "content of b, a bit longer",
 		},
 	}
 	dir := t.TempDir()
@@ -605,12 +449,8 @@ func TestFileService_DownloadArchive_Success(t *testing.T) {
 }
 
 func TestFileService_DownloadArchive_RepositoryError(t *testing.T) {
-	repo := &fakeRepository{
-		getByIDsFunc: func(ids []string) ([]repository.File, error) {
-			return nil, errors.New("db error")
-		},
-	}
-	storage := &fakeStorageProvider{}
+	repo := &repomock.Repository{Err: errors.New("db error")}
+	storage := &storagemock.Provider{}
 	dir := t.TempDir()
 	svc := NewFileService(repo, storage, dir, dir)
 
@@ -631,13 +471,11 @@ func TestFileService_DownloadArchive_RepositoryError(t *testing.T) {
 }
 
 func TestFileService_DownloadArchive_SomeFilesNotFound(t *testing.T) {
-	repo := &fakeRepository{
-		getByIDsFunc: func(ids []string) ([]repository.File, error) {
-			// Only one of the two requested IDs resolved.
-			return []repository.File{{ID: "1", Name: "a.txt", StoragePath: "path/a"}}, nil
-		},
+	repo := &repomock.Repository{
+		// Only one of the two requested IDs resolved.
+		Files: []repository.File{{ID: "1", Name: "a.txt", StoragePath: "path/a"}},
 	}
-	storage := &fakeStorageProvider{}
+	storage := &storagemock.Provider{}
 	dir := t.TempDir()
 	svc := NewFileService(repo, storage, dir, dir)
 
@@ -652,8 +490,8 @@ func TestFileService_DownloadArchive_SomeFilesNotFound(t *testing.T) {
 	if reader != nil {
 		t.Errorf("DownloadArchive() reader = %v, want nil", reader)
 	}
-	if len(storage.fetchCalls) != 0 {
-		t.Errorf("storage.Fetch called %d times, want 0 (should fail before fetching)", len(storage.fetchCalls))
+	if len(storage.FetchedPaths) != 0 {
+		t.Errorf("storage.Fetch called %d times, want 0 (should fail before fetching)", len(storage.FetchedPaths))
 	}
 	if got := archiveFilesRemaining(t, dir); got != 0 {
 		t.Errorf("temp dir has %d archive file(s), want 0", got)
@@ -661,22 +499,15 @@ func TestFileService_DownloadArchive_SomeFilesNotFound(t *testing.T) {
 }
 
 func TestFileService_DownloadArchive_StorageErrorMidLoop(t *testing.T) {
-	repo := &fakeRepository{
-		getByIDsFunc: func(ids []string) ([]repository.File, error) {
-			return []repository.File{
-				{ID: "1", Name: "a.txt", StoragePath: "path/a"},
-				{ID: "2", Name: "b.txt", StoragePath: "path/b"},
-			}, nil
+	repo := &repomock.Repository{
+		Files: []repository.File{
+			{ID: "1", Name: "a.txt", StoragePath: "path/a"},
+			{ID: "2", Name: "b.txt", StoragePath: "path/b"},
 		},
 	}
-	storage := &fakeStorageProvider{
-		fetchFunc: func(path string) (io.ReadCloser, error) {
-			if path == "path/a" {
-				return io.NopCloser(strings.NewReader("ok")), nil
-			}
-			return nil, errors.New("object missing")
-		},
-	}
+	// path/b is deliberately left out of Content, so the second Fetch call
+	// fails while the first one already succeeded.
+	storage := &storagemock.Provider{Content: map[string]string{"path/a": "ok"}}
 	dir := t.TempDir()
 	svc := NewFileService(repo, storage, dir, dir)
 
@@ -694,8 +525,6 @@ func TestFileService_DownloadArchive_StorageErrorMidLoop(t *testing.T) {
 	}
 }
 
-// brokenReader returns a few bytes successfully, then a read error - used to
-// exercise the io.Copy failure branch inside DownloadArchive's zip loop.
 type brokenReader struct {
 	data []byte
 	sent bool
@@ -711,14 +540,12 @@ func (b *brokenReader) Read(p []byte) (int, error) {
 }
 
 func TestFileService_DownloadArchive_CopyErrorMidStream(t *testing.T) {
-	repo := &fakeRepository{
-		getByIDsFunc: func(ids []string) ([]repository.File, error) {
-			return []repository.File{{ID: "1", Name: "a.txt", StoragePath: "path/a"}}, nil
-		},
+	repo := &repomock.Repository{
+		Files: []repository.File{{ID: "1", Name: "a.txt", StoragePath: "path/a"}},
 	}
-	storage := &fakeStorageProvider{
-		fetchFunc: func(path string) (io.ReadCloser, error) {
-			return io.NopCloser(&brokenReader{data: []byte("partial")}), nil
+	storage := &storagemock.Provider{
+		Readers: map[string]io.ReadCloser{
+			"path/a": io.NopCloser(&brokenReader{data: []byte("partial")}),
 		},
 	}
 	dir := t.TempDir()
@@ -741,12 +568,10 @@ func TestFileService_DownloadArchive_CopyErrorMidStream(t *testing.T) {
 }
 
 func TestFileService_DownloadArchive_TempFileCreationFailure(t *testing.T) {
-	repo := &fakeRepository{
-		getByIDsFunc: func(ids []string) ([]repository.File, error) {
-			return []repository.File{{ID: "1", Name: "a.txt", StoragePath: "path/a"}}, nil
-		},
+	repo := &repomock.Repository{
+		Files: []repository.File{{ID: "1", Name: "a.txt", StoragePath: "path/a"}},
 	}
-	storage := &fakeStorageProvider{}
+	storage := &storagemock.Provider{}
 
 	// Point tempDir through a path component that is a regular file, not a
 	// directory, so both the constructor's os.MkdirAll and DownloadArchive's

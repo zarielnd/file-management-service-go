@@ -13,7 +13,7 @@ import (
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/httpx"
 )
 
-type fileService interface {
+type FileService interface {
 	Upload(ctx context.Context, input client.UploadInput) (domain.File, error)
 	Download(ctx context.Context, id string) (io.ReadCloser, domain.File, error)
 	List(ctx context.Context, page, pageSize int) ([]domain.File, int, error)
@@ -22,11 +22,11 @@ type fileService interface {
 }
 
 type FileHandler struct {
-	service fileService
+	service FileService
 	maxMultipartMemory int64
 }
 
-func NewFileHandler(fileService fileService, maxMultipartMemory int64) *FileHandler {
+func NewFileHandler(fileService FileService, maxMultipartMemory int64) *FileHandler {
 	return &FileHandler{
 		service: fileService,
 		maxMultipartMemory: maxMultipartMemory,
