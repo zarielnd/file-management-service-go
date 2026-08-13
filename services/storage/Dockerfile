@@ -24,6 +24,7 @@ COPY services/storage/go.mod services/storage/go.sum ./services/storage/
 
 # Download dependencies
 WORKDIR /build/services/storage
+RUN go mod tidy
 RUN go mod download
 
 # Copy source code
