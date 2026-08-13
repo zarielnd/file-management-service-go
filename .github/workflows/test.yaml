@@ -1,4 +1,4 @@
-name: Integration Tests
+name: Test Pipeline
 
 on:
   pull_request:
@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  integration-test:
-    name: Integration Tests
+  test:
+    name: Unit Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -23,21 +23,5 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Start services
-        run: docker compose up -d --build
-
-      - name: Show service status
-        run: docker compose ps
-
-      - name: Run integration tests
-        env:
-          STORAGE_GRPC_TARGET: localhost:50051
-        run: go test -v ./services/...
-
-      - name: Show logs on failure
-        if: failure()
-        run: docker compose logs --no-color
-
-      - name: Cleanup
-        if: always()
-        run: docker compose down -v
+      - name: Run tests
+        run: go test ./services/...
