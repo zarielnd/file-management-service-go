@@ -117,7 +117,7 @@ func TestFileService_Store_Success(t *testing.T) {
 	}
 
 	// repo.Create received the same file that was returned.
-	if repo.CreatedFile == nil {
+	if repo.CreatedFile != nil {
 		t.Fatalf("repo.Create was not called")
 	}
 	if *repo.CreatedFile != got {
