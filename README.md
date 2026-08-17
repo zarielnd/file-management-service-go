@@ -8,7 +8,7 @@ Users upload a single file and receive an ID. They can later retrieve the file b
 
 ## Architecture (final state)
 
-```
+```graph
 [Frontend] → HTTP → [File Server] → gRPC → [Storage Service]
                           ↓
                    [Temporal Worker]

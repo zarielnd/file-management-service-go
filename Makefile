@@ -17,20 +17,41 @@ build: ## Build all service binaries into bin/
 # Development
 # =============================================================================
 
-test: ## Run tests for all services
-	go test ./services/...
+MODULES := gen services/file-server services/storage
 
-test-race: ## Run tests with race detector
-	go test -race ./services/...
+
+test: ## Run tests for all modules
+	@for %%m in ($(MODULES)) do ( \
+		echo === Testing %%m === && \
+		go -C %%m test ./... \
+	)
+
+test-race: ## Run tests with race detector for all modules
+	@for %%m in ($(MODULES)) do ( \
+		echo === Race testing %%m === && \
+		go -C %%m test -race ./... \
+	)
+
+test-cover: ## Run tests with coverage for all modules
+	@for %%m in ($(MODULES)) do ( \
+		echo === Coverage testing %%m === && \
+		go -C %%m test -cover ./... \
+	)
 
 fmt: ## Format all Go code
-	go fmt ./services/...
+	@for %%m in ($(MODULES)) do ( \
+		echo === Formatting %%m === && \
+		go -C %%m fmt ./... \
+	)
 
-vet: ## Run go vet on all services
-	go vet ./services/...
+vet: ## Run go vet on all modules
+	@for %%m in ($(MODULES)) do ( \
+		echo === Vetting %%m === && \
+		go -C %%m vet ./... \
+	)
 
 lint: ## Run golangci-lint
-	golangci-lint run ./services/...
+	golangci-lint run ./gen/... ./services/file-server/... ./services/storage/...
 
 # =============================================================================
 # Code Generation
