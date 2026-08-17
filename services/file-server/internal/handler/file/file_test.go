@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"strings"
 	"testing"
 
@@ -28,8 +29,23 @@ func TestFileHandler_Upload(t *testing.T) {
 
 		mockSvc.EXPECT().Upload(gomock.Any(), gomock.Any()).DoAndReturn(
 			func(_ context.Context, in client.UploadInput) (domain.File, error) {
+				content, err := io.ReadAll(in.Content)
+				if err != nil {
+					t.Fatal(err)
+				}
 				if in.Name != "test.txt" {
 					t.Errorf("filename = %s, want test.txt", in.Name)
+				}
+				if string(content) != "hello" {
+					t.Errorf("content = %q, want %q", content, "hello")
+				}
+
+				if in.ContentType != "text/plain" {
+					t.Errorf("content type = %q, want %q", in.ContentType, "text/plain")
+				}
+
+				if in.Size != 5 {
+					t.Errorf("size = %d, want 5", in.Size)
 				}
 				return domain.File{ID: "123", Name: "test.txt"}, nil
 			},
@@ -37,8 +53,22 @@ func TestFileHandler_Upload(t *testing.T) {
 
 		var body bytes.Buffer
 		writer := multipart.NewWriter(&body)
-		part, _ := writer.CreateFormFile("files", "test.txt")
-		io.WriteString(part, "hello")
+		header := make(textproto.MIMEHeader)
+		header.Set(
+			"Content-Disposition",
+			`form-data; name="files"; filename="test.txt"`,
+		)
+		header.Set("Content-Type", "text/plain")
+
+		part, err := writer.CreatePart(header)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = io.WriteString(part, "hello")
+		if err != nil {
+			t.Fatal(err)
+		}
 		writer.Close()
 
 		req := httptest.NewRequest(http.MethodPost, "/upload", &body)
@@ -141,11 +171,14 @@ func TestFileHandler_Download(t *testing.T) {
 		if ct := rr.Header().Get("Content-Type"); ct != "text/plain" {
 			t.Errorf("Content-Type = %s, want text/plain", ct)
 		}
+		if got := rr.Header().Get("Content-Length"); got != "12" {
+			t.Errorf("Content-Length = %s, want 12", got)
+		}
 		if cd := rr.Header().Get("Content-Disposition"); !strings.Contains(cd, "doc.txt") {
 			t.Errorf("Content-Disposition = %s, want contain doc.txt", cd)
 		}
-		if !strings.Contains(rr.Body.String(), "file content") {
-			t.Error("missing body content")
+		if got := rr.Body.String(); got != "file content" {
+			t.Errorf("body = %q, want %q", got, "file content")
 		}
 	})
 
@@ -290,17 +323,24 @@ func TestFileHandler_DownloadMultiple(t *testing.T) {
 		mockSetup func(*mocks.MockFileService)
 		wantCode  int
 		wantCT    string
+		wantCD    string
+		wantBody  string
 	}{
 		{
 			name: "success",
-			body: `{"file_ids":["1","2"]}`+"\n",
+			body: `{"file_ids":["1","2"]}`,
 			mockSetup: func(m *mocks.MockFileService) {
-				m.EXPECT().DownloadMultiple(gomock.Any(), []string{"1", "2"}).Return(
-					io.NopCloser(strings.NewReader("zipdata")), nil,
-				)
+				m.EXPECT().
+					DownloadMultiple(gomock.Any(), []string{"1", "2"}).
+					Return(
+						io.NopCloser(strings.NewReader("zipdata")),
+						nil,
+					)
 			},
 			wantCode: http.StatusOK,
 			wantCT:   "application/zip",
+			wantCD:   `attachment; filename="files.zip"`,
+			wantBody: "zipdata",
 		},
 		{
 			name:     "empty ids",
@@ -316,9 +356,12 @@ func TestFileHandler_DownloadMultiple(t *testing.T) {
 			name: "service error",
 			body: `{"file_ids":["1"]}`,
 			mockSetup: func(m *mocks.MockFileService) {
-				m.EXPECT().DownloadMultiple(gomock.Any(), []string{"1"}).Return(
-					nil, errors.New("archive fail"),
-				)
+				m.EXPECT().
+					DownloadMultiple(gomock.Any(), []string{"1"}).
+					Return(
+						nil,
+						errors.New("archive fail"),
+					)
 			},
 			wantCode: http.StatusInternalServerError,
 		},
@@ -328,26 +371,64 @@ func TestFileHandler_DownloadMultiple(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockSvc := mocks.NewMockFileService(ctrl)
+
 			h := NewFileHandler(mockSvc, 32<<20)
 
 			if tt.mockSetup != nil {
 				tt.mockSetup(mockSvc)
 			}
 
-			req := httptest.NewRequest(http.MethodPost, "/download", strings.NewReader(tt.body))
+			req := httptest.NewRequest(
+				http.MethodPost,
+				"/download",
+				strings.NewReader(tt.body),
+			)
 			req.Header.Set("Content-Type", "application/json")
+
 			rr := httptest.NewRecorder()
 
+			// Act
 			h.DownloadMultiple(rr, req)
 
+			// Assert status
 			if rr.Code != tt.wantCode {
-				t.Fatalf("status = %d, want %d", rr.Code, tt.wantCode)
+				t.Fatalf(
+					"status = %d, want %d",
+					rr.Code,
+					tt.wantCode,
+				)
 			}
 
-			if tt.wantCT != "" {
-				if ct := rr.Header().Get("Content-Type"); ct != tt.wantCT {
-					t.Errorf("Content-Type = %s, want %s", ct, tt.wantCT)
-				}
+			// Error cases don't need to check successful response headers/body.
+			if tt.wantCode != http.StatusOK {
+				return
+			}
+
+			// Assert Content-Type
+			if got := rr.Header().Get("Content-Type"); got != tt.wantCT {
+				t.Errorf(
+					"Content-Type = %q, want %q",
+					got,
+					tt.wantCT,
+				)
+			}
+
+			// Assert Content-Disposition
+			if got := rr.Header().Get("Content-Disposition"); got != tt.wantCD {
+				t.Errorf(
+					"Content-Disposition = %q, want %q",
+					got,
+					tt.wantCD,
+				)
+			}
+
+			// Assert response body
+			if got := rr.Body.String(); got != tt.wantBody {
+				t.Errorf(
+					"body = %q, want %q",
+					got,
+					tt.wantBody,
+				)
 			}
 		})
 	}
