@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package storage.v2;
+
+option go_package = "github.com/zarielnd/file-management-service-go/gen/storage/v2;storagev2";
+
+import "google/protobuf/timestamp.proto";
+
+service StorageService {
+  rpc UploadFile(stream UploadFileRequest) returns (UploadFileResponse);
+  rpc GetFile(GetFileRequest) returns (stream GetFileResponse);
+  rpc GetMetadata(GetMetadataRequest) returns (FileMetadata);
+  rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
+  rpc DownloadArchive(DownloadArchiveRequest) returns (stream DownloadArchiveResponse) {
+    option deprecated = true;
+  };
+  // NEW: Batch presigned URLs for Temporal worker
+  rpc GetDownloadURLs(GetDownloadURLsRequest) returns (GetDownloadURLsResponse);
+}
+
+message UploadFileRequest {
+  oneof payload {
+    FileInfo info = 1;
+    bytes chunk_data = 2;
+  }
+}
+
+message FileInfo {
+  string filename = 1;
+  string content_type = 2;
+  int64 size = 3;
+}
+
+message UploadFileResponse {
+  FileMetadata file = 1;
+}
+
+message GetFileRequest {
+  string id = 1;
+}
+
+message GetFileResponse {
+  FileMetadata metadata = 1;
+  bytes data = 2;
+}
+
+message GetMetadataRequest {
+  string id = 1;
+}
+
+message FileMetadata {
+  string id = 1;
+  string name = 2;
+  int64 size = 3;
+  string content_type = 4;
+  string checksum = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message ListFilesRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+}
+
+message ListFilesResponse {
+  repeated FileMetadata files = 1;
+  int32 total = 2;
+}
+
+// NEW messages
+message GetDownloadURLsRequest {
+  repeated string file_ids = 1;
+}
+
+message FileDownloadURL {
+  string file_id = 1;
+  string name = 2;
+  string url = 3;           // presigned URL
+  int64 size_bytes = 4;
+}
+
+message GetDownloadURLsResponse {
+  repeated FileDownloadURL files = 1;
+}
+
+message DownloadArchiveRequest {
+  repeated string file_ids = 1;
+}
+
+message DownloadArchiveResponse {
+  bytes data = 1;
+}

@@ -9,29 +9,58 @@ import (
 
 type Config struct {
 	GRPCPort string
-	DBConnectionString string
+
+	// Storage backend: "local" or "s3"
+	StorageBackend string
+
+	// Local storage (only used when StorageBackend == "local")
 	StoragePath string
-	TempPath string
+	TempPath    string
+
+	// S3 / MinIO (only used when StorageBackend == "s3")
+	S3Endpoint     string
+	S3Region       string
+	S3Bucket       string
+	S3AccessKey    string
+	S3SecretKey    string
+	S3UsePathStyle bool // true for MinIO/LocalStack
+
+	DBConnectionString string
 }
 
 func Load() (*Config, error) {
-	godotenv.Load("../../.env");
+	_ = godotenv.Load("../../.env")
 
-	storagePath := getEnv("STORAGE_PATH", "./data")
-	if err:= os.MkdirAll(storagePath, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create storage directory: %w", err)
-	}
-	tempPath:= getEnv("TEMP_PATH", "./data/temp")
-	if err:= os.MkdirAll(tempPath, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create temp directory: %w", err)
-	}
+	cfg := &Config{
+		GRPCPort:       getEnv("GRPC_PORT", "50051"),
+		StorageBackend: getEnv("STORAGE_BACKEND", "local"),
 
-	return &Config{
-		GRPCPort: getEnv("GRPC_PORT", "50051"),
+		// Local
+		StoragePath: getEnv("STORAGE_PATH", "./data"),
+		TempPath:    getEnv("TEMP_PATH", "./data/temp"),
+
+		// S3
+		S3Endpoint:     getEnv("S3_ENDPOINT", ""),
+		S3Region:       getEnv("S3_REGION", "us-east-1"),
+		S3Bucket:       getEnv("S3_BUCKET", ""),
+		S3AccessKey:    getEnv("S3_ACCESS_KEY", ""),
+		S3SecretKey:    getEnv("S3_SECRET_KEY", ""),
+		S3UsePathStyle: getEnv("S3_USE_PATH_STYLE", "true") == "true",
+
 		DBConnectionString: getEnv("DATABASE_URL", ""),
-		StoragePath: storagePath,
-		TempPath: tempPath,
-	}, nil
+	}
+
+	// Only create local directories when using local backend
+	if cfg.StorageBackend == "local" {
+		if err := os.MkdirAll(cfg.StoragePath, 0o755); err != nil {
+			return nil, fmt.Errorf("failed to create storage directory: %w", err)
+		}
+		if err := os.MkdirAll(cfg.TempPath, 0o755); err != nil {
+			return nil, fmt.Errorf("failed to create temp directory: %w", err)
+		}
+	}
+
+	return cfg, nil
 }
 
 func getEnv(key, defaultValue string) string {

@@ -11,16 +11,16 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-type GRPCServer struct {
+type GRPCServerV1 struct {
 	storagev1.UnimplementedStorageServiceServer
 	service *service.FileService
 }
 
-func NewGRPCServer(service *service.FileService) *GRPCServer {
-	return &GRPCServer{service: service}
+func NewGRPCServerV1(service *service.FileService) *GRPCServerV1 {
+	return &GRPCServerV1{service: service}
 }
 
-func (s *GRPCServer) UploadFile(stream storagev1.StorageService_UploadFileServer) error {
+func (s *GRPCServerV1) UploadFile(stream storagev1.StorageService_UploadFileServer) error {
 	req, err := stream.Recv()
 	if err != nil {
 		return err
@@ -68,7 +68,7 @@ func (s *GRPCServer) UploadFile(stream storagev1.StorageService_UploadFileServer
 	})
 }
 
-func (s *GRPCServer) GetFile(req *storagev1.GetFileRequest, stream storagev1.StorageService_GetFileServer) error {
+func (s *GRPCServerV1) GetFile(req *storagev1.GetFileRequest, stream storagev1.StorageService_GetFileServer) error {
 	rc, file, err := s.service.Fetch(stream.Context(), req.Id)
 	if err != nil {
 		return mapError(err)
@@ -105,22 +105,22 @@ func (s *GRPCServer) GetFile(req *storagev1.GetFileRequest, stream storagev1.Sto
 	return nil
 }
 
-func (s *GRPCServer) GetMetadata(ctx context.Context, req *storagev1.GetMetadataRequest) (*storagev1.FileMetadata, error) {
+func (s *GRPCServerV1) GetMetadata(ctx context.Context, req *storagev1.GetMetadataRequest) (*storagev1.FileMetadata, error) {
 	file, err := s.service.Metadata(ctx, req.Id)
 	if err != nil {
 		return nil, mapError(err)
 	}
 	return &storagev1.FileMetadata{
-		Id:        file.ID,
-		Name:      file.Name,
-		Size:      file.SizeBytes,
+		Id:          file.ID,
+		Name:        file.Name,
+		Size:        file.SizeBytes,
 		ContentType: file.ContentType,
-		Checksum:  file.Checksum,
-		CreatedAt: timestamppb.New(file.CreatedAt),
+		Checksum:    file.Checksum,
+		CreatedAt:   timestamppb.New(file.CreatedAt),
 	}, nil
 }
 
-func (s *GRPCServer) ListFiles(ctx context.Context, req *storagev1.ListFilesRequest) (*storagev1.ListFilesResponse, error) {
+func (s *GRPCServerV1) ListFiles(ctx context.Context, req *storagev1.ListFilesRequest) (*storagev1.ListFilesResponse, error) {
 	files, total, err := s.service.List(ctx, int(req.Page), int(req.PageSize))
 	if err != nil {
 		return nil, mapError(err)
@@ -143,7 +143,7 @@ func (s *GRPCServer) ListFiles(ctx context.Context, req *storagev1.ListFilesRequ
 	return resp, nil
 }
 
-func (s *GRPCServer) DownloadArchive(req *storagev1.DownloadArchiveRequest, stream storagev1.StorageService_DownloadArchiveServer) error {
+func (s *GRPCServerV1) DownloadArchive(req *storagev1.DownloadArchiveRequest, stream storagev1.StorageService_DownloadArchiveServer) error {
 	rc, err := s.service.DownloadArchive(stream.Context(), req.FileIds)
 	if err != nil {
 		return mapError(err)

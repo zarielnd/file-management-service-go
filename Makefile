@@ -64,7 +64,7 @@ proto: ## Generate Go code from protobuf definitions
 		--go_opt=paths=source_relative \
 		--go-grpc_out=gen \
 		--go-grpc_opt=paths=source_relative \
-		storage/v1/storage.proto
+		storage/v2/storage.proto
 
 # =============================================================================
 # Docker

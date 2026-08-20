@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net"
 
@@ -9,16 +10,23 @@ import (
 	"github.com/zarielnd/file-management-service-go/services/storage/internal/repository/postgres"
 	"github.com/zarielnd/file-management-service-go/services/storage/internal/server"
 	"github.com/zarielnd/file-management-service-go/services/storage/internal/service"
-	"github.com/zarielnd/file-management-service-go/services/storage/internal/storage/local"
+	"github.com/zarielnd/file-management-service-go/services/storage/internal/storage"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 func main() {
+	ctx := context.Background()
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
+	}
+
+	provider, err := storage.NewProviderFromConfig(ctx, cfg)
+	if err != nil {
+		log.Fatalf("failed to init storage: %v", err)
 	}
 
 	repo, err := postgres.NewRepository(cfg.DBConnectionString)
@@ -27,10 +35,9 @@ func main() {
 	}
 	defer repo.Close()
 
-	storageProvider := local.NewStore(cfg.StoragePath)
-	fileSvc := service.NewFileService(repo, storageProvider, cfg.StoragePath,cfg.TempPath)
+	fileSvc := service.NewFileService(repo, provider, cfg.StoragePath, cfg.TempPath)
 
-	grpcServer := server.NewGRPCServer(fileSvc)
+	grpcServer := server.NewGRPCServerV1(fileSvc)
 
 	lis, err := net.Listen("tcp", ":"+cfg.GRPCPort)
 	if err != nil {
