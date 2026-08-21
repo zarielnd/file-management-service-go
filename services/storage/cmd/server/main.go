@@ -5,7 +5,7 @@ import (
 	"log"
 	"net"
 
-	storagev1 "github.com/zarielnd/file-management-service-go/gen/storage/v1"
+	storagev2 "github.com/zarielnd/file-management-service-go/gen/storage/v2"
 	"github.com/zarielnd/file-management-service-go/services/storage/internal/config"
 	"github.com/zarielnd/file-management-service-go/services/storage/internal/repository/postgres"
 	"github.com/zarielnd/file-management-service-go/services/storage/internal/server"
@@ -37,7 +37,7 @@ func main() {
 
 	fileSvc := service.NewFileService(repo, provider, cfg.StoragePath, cfg.TempPath)
 
-	grpcServer := server.NewGRPCServerV1(fileSvc)
+	grpcServer := server.NewGRPCServer(fileSvc)
 
 	lis, err := net.Listen("tcp", ":"+cfg.GRPCPort)
 	if err != nil {
@@ -50,7 +50,7 @@ func main() {
 	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
 	grpc_health_v1.RegisterHealthServer(s, healthServer)
 
-	storagev1.RegisterStorageServiceServer(s, grpcServer)
+	storagev2.RegisterStorageServiceServer(s, grpcServer)
 
 	log.Printf("storage service running on :%s", cfg.GRPCPort)
 	if err := s.Serve(lis); err != nil {

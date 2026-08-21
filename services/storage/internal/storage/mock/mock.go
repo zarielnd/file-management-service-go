@@ -4,8 +4,10 @@ package mock
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/zarielnd/file-management-service-go/services/storage/internal/storage"
 )
@@ -51,6 +53,16 @@ func (p *Provider) Fetch(ctx context.Context, path string) (io.ReadCloser, error
 		return nil, errors.New("mock: no content configured for path " + path)
 	}
 	return io.NopCloser(strings.NewReader(content)), nil
+}
+
+func (s *Provider) PresignFetch(ctx context.Context, path string, expiry time.Duration) (string, error) {
+	// Local dev: return internal file-server route or just error if not supported
+	return "", fmt.Errorf("presigned URLs not supported for local storage")
+}
+
+func (s *Provider) PresignStore(ctx context.Context, path string, expiry time.Duration) (string, error) {
+	// Local dev: return internal file-server route or just error if not supported
+	return "", fmt.Errorf("presigned URLs not supported for local storage")
 }
 
 var _ storage.Provider = (*Provider)(nil)

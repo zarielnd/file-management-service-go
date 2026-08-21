@@ -16,6 +16,7 @@ service StorageService {
   };
   // NEW: Batch presigned URLs for Temporal worker
   rpc GetDownloadURLs(GetDownloadURLsRequest) returns (GetDownloadURLsResponse);
+  rpc GetUploadURL(GetUploadURLRequest) returns (GetUploadURLResponse);
 }
 
 message UploadFileRequest {
@@ -76,7 +77,7 @@ message FileDownloadURL {
   string file_id = 1;
   string name = 2;
   string url = 3;           // presigned URL
-  int64 size_bytes = 4;
+  int64 size_bytes = 4; 
 }
 
 message GetDownloadURLsResponse {
@@ -89,4 +90,14 @@ message DownloadArchiveRequest {
 
 message DownloadArchiveResponse {
   bytes data = 1;
+}
+
+message GetUploadURLRequest {
+  string filename = 1;
+  string content_type = 2;
+}
+
+message GetUploadURLResponse {
+  string upload_url = 1;
+  string file_id = 2;
 }

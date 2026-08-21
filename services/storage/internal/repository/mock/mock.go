@@ -10,7 +10,7 @@ import (
 type Repository struct {
 	// Canned results, returned by the matching method.
 	File      *repository.File   // GetByID
-	Files     []repository.File  // GetByIDs
+	Files     []*repository.File // GetByIDs
 	ListFiles []*repository.File // List
 	Total     int                // List
 	Err       error              // returned by whichever method is called
@@ -36,7 +36,7 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*repository.File, 
 	return r.File, nil
 }
 
-func (r *Repository) GetByIDs(ctx context.Context, ids []string) ([]repository.File, error) {
+func (r *Repository) GetByIDs(ctx context.Context, ids []string) ([]*repository.File, error) {
 	r.GetByIDsArg = ids
 	if r.Err != nil {
 		return nil, r.Err

@@ -9,10 +9,14 @@ import (
 )
 
 type Config struct {
-	ServerPort string
-	StorageGRPCTarget string
-	MaxUploadSize int64
+	ServerPort         string
+	StorageGRPCTarget  string
+	MaxUploadSize      int64
 	MaxMultipartMemory int64
+
+	// Worker fields (ignored by API server, harmless)
+	TemporalHost  string
+	TemporalQueue string
 }
 
 func Load() (*Config, error) {
@@ -27,10 +31,13 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid MAX_MULTIPART_MEMORY: %w", err)
 	}
 	return &Config{
-		ServerPort: getEnv("SERVER_PORT", "8080"),
-		StorageGRPCTarget: getEnv("STORAGE_GRPC_TARGET", "localhost:50051"),
-		MaxUploadSize: maxSize,
+		ServerPort:         getEnv("SERVER_PORT", "8080"),
+		StorageGRPCTarget:  getEnv("STORAGE_GRPC_TARGET", "localhost:50051"),
+		MaxUploadSize:      maxSize,
 		MaxMultipartMemory: maxMem,
+
+		TemporalHost:  getEnv("TEMPORAL_HOST", "temporal:7233"),
+		TemporalQueue: getEnv("TEMPORAL_QUEUE", "archive-queue"),
 	}, nil
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -104,6 +105,33 @@ func (s *Store) Fetch(ctx context.Context, path string) (io.ReadCloser, error) {
 	}
 
 	return out.Body, nil
+}
+
+func (s *Store) PresignFetch(ctx context.Context, path string, expiry time.Duration) (string, error) {
+	key := s.key(path)
+	presignClient := s3.NewPresignClient(s.client)
+	req, err := presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	}, s3.WithPresignExpires(expiry))
+	if err != nil {
+		return "", fmt.Errorf("failed to presign s3://%s/%s: %w", s.bucket, key, err)
+	}
+	return req.URL, nil
+}
+
+func (s *Store) PresignStore(ctx context.Context, path string, expiry time.Duration) (string, error) {
+	key := s.key(path)
+	presignClient := s3.NewPresignClient(s.client)
+	req, err := presignClient.PresignPutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(s.bucket),
+		Key:         aws.String(key),
+		ContentType: aws.String("application/octet-stream"),
+	}, s3.WithPresignExpires(expiry))
+	if err != nil {
+		return "", fmt.Errorf("failed to presign PUT s3://%s/%s: %w", s.bucket, key, err)
+	}
+	return req.URL, nil
 }
 
 type countingReader struct {

@@ -62,9 +62,9 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*repository.File, 
 	return &f, nil
 }
 
-func (r *Repository) GetByIDs(ctx context.Context, ids []string) ([]repository.File, error) {
+func (r *Repository) GetByIDs(ctx context.Context, ids []string) ([]*repository.File, error) {
 	if len(ids) == 0 {
-		return []repository.File{}, nil
+		return []*repository.File{}, nil
 	}
 
 	placeholders := make([]string, len(ids))
@@ -75,7 +75,7 @@ func (r *Repository) GetByIDs(ctx context.Context, ids []string) ([]repository.F
 		args[i] = id
 	}
 
-	query := fmt.Sprintf(`SELECT id, name, storage_path, content_type, size_bytes, checksum, created_at FROM files WHERE id IN (%s)`, 
+	query := fmt.Sprintf(`SELECT id, name, storage_path, content_type, size_bytes, checksum, created_at FROM files WHERE id IN (%s)`,
 		strings.Join(placeholders, ","))
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -83,13 +83,13 @@ func (r *Repository) GetByIDs(ctx context.Context, ids []string) ([]repository.F
 	}
 	defer rows.Close()
 
-	var files []repository.File
+	var files []*repository.File
 	for rows.Next() {
 		var f repository.File
 		if err := rows.Scan(&f.ID, &f.Name, &f.StoragePath, &f.ContentType, &f.SizeBytes, &f.Checksum, &f.CreatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan file: %w", err)
 		}
-		files = append(files, f)
+		files = append(files, &f)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -104,13 +104,13 @@ func (r *Repository) List(ctx context.Context, limit, offset int) ([]*repository
 	var totalCount int
 	err := r.db.QueryRowContext(ctx, countQuery).Scan(&totalCount)
 	if err != nil {
-		return nil,0, fmt.Errorf("failed to count files: %w", err)
+		return nil, 0, fmt.Errorf("failed to count files: %w", err)
 	}
 
 	query := `SELECT id, name, storage_path, content_type, size_bytes, checksum, created_at FROM files ORDER BY created_at DESC LIMIT $1 OFFSET $2`
 	rows, err := r.db.QueryContext(ctx, query, limit, offset)
 	if err != nil {
-		return nil,0, fmt.Errorf("failed to list files: %w", err)
+		return nil, 0, fmt.Errorf("failed to list files: %w", err)
 	}
 	defer rows.Close()
 
@@ -118,14 +118,14 @@ func (r *Repository) List(ctx context.Context, limit, offset int) ([]*repository
 	for rows.Next() {
 		var f repository.File
 		if err := rows.Scan(&f.ID, &f.Name, &f.StoragePath, &f.ContentType, &f.SizeBytes, &f.Checksum, &f.CreatedAt); err != nil {
-			return nil,0, fmt.Errorf("failed to scan file: %w", err)
+			return nil, 0, fmt.Errorf("failed to scan file: %w", err)
 		}
 		files = append(files, &f)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil,0, fmt.Errorf("error iterating over rows: %w", err)
+		return nil, 0, fmt.Errorf("error iterating over rows: %w", err)
 	}
 
-	return files,totalCount, nil
+	return files, totalCount, nil
 }

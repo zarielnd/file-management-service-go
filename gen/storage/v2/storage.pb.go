@@ -693,6 +693,198 @@ func (x *GetDownloadURLsResponse) GetFiles() []*FileDownloadURL {
 	return nil
 }
 
+type DownloadArchiveRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FileIds       []string               `protobuf:"bytes,1,rep,name=file_ids,json=fileIds,proto3" json:"file_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DownloadArchiveRequest) Reset() {
+	*x = DownloadArchiveRequest{}
+	mi := &file_storage_v2_storage_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DownloadArchiveRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DownloadArchiveRequest) ProtoMessage() {}
+
+func (x *DownloadArchiveRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_v2_storage_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DownloadArchiveRequest.ProtoReflect.Descriptor instead.
+func (*DownloadArchiveRequest) Descriptor() ([]byte, []int) {
+	return file_storage_v2_storage_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *DownloadArchiveRequest) GetFileIds() []string {
+	if x != nil {
+		return x.FileIds
+	}
+	return nil
+}
+
+type DownloadArchiveResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Data          []byte                 `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DownloadArchiveResponse) Reset() {
+	*x = DownloadArchiveResponse{}
+	mi := &file_storage_v2_storage_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DownloadArchiveResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DownloadArchiveResponse) ProtoMessage() {}
+
+func (x *DownloadArchiveResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_v2_storage_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DownloadArchiveResponse.ProtoReflect.Descriptor instead.
+func (*DownloadArchiveResponse) Descriptor() ([]byte, []int) {
+	return file_storage_v2_storage_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *DownloadArchiveResponse) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+type GetUploadURLRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Filename      string                 `protobuf:"bytes,1,opt,name=filename,proto3" json:"filename,omitempty"`
+	ContentType   string                 `protobuf:"bytes,2,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetUploadURLRequest) Reset() {
+	*x = GetUploadURLRequest{}
+	mi := &file_storage_v2_storage_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetUploadURLRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetUploadURLRequest) ProtoMessage() {}
+
+func (x *GetUploadURLRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_v2_storage_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetUploadURLRequest.ProtoReflect.Descriptor instead.
+func (*GetUploadURLRequest) Descriptor() ([]byte, []int) {
+	return file_storage_v2_storage_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *GetUploadURLRequest) GetFilename() string {
+	if x != nil {
+		return x.Filename
+	}
+	return ""
+}
+
+func (x *GetUploadURLRequest) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
+}
+
+type GetUploadURLResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UploadUrl     string                 `protobuf:"bytes,1,opt,name=upload_url,json=uploadUrl,proto3" json:"upload_url,omitempty"`
+	FileId        string                 `protobuf:"bytes,2,opt,name=file_id,json=fileId,proto3" json:"file_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetUploadURLResponse) Reset() {
+	*x = GetUploadURLResponse{}
+	mi := &file_storage_v2_storage_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetUploadURLResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetUploadURLResponse) ProtoMessage() {}
+
+func (x *GetUploadURLResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_v2_storage_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetUploadURLResponse.ProtoReflect.Descriptor instead.
+func (*GetUploadURLResponse) Descriptor() ([]byte, []int) {
+	return file_storage_v2_storage_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *GetUploadURLResponse) GetUploadUrl() string {
+	if x != nil {
+		return x.UploadUrl
+	}
+	return ""
+}
+
+func (x *GetUploadURLResponse) GetFileId() string {
+	if x != nil {
+		return x.FileId
+	}
+	return ""
+}
+
 var File_storage_v2_storage_proto protoreflect.FileDescriptor
 
 const file_storage_v2_storage_proto_rawDesc = "" +
@@ -740,14 +932,27 @@ const file_storage_v2_storage_proto_rawDesc = "" +
 	"\n" +
 	"size_bytes\x18\x04 \x01(\x03R\tsizeBytes\"L\n" +
 	"\x17GetDownloadURLsResponse\x121\n" +
-	"\x05files\x18\x01 \x03(\v2\x1b.storage.v2.FileDownloadURLR\x05files2\x94\x03\n" +
+	"\x05files\x18\x01 \x03(\v2\x1b.storage.v2.FileDownloadURLR\x05files\"3\n" +
+	"\x16DownloadArchiveRequest\x12\x19\n" +
+	"\bfile_ids\x18\x01 \x03(\tR\afileIds\"-\n" +
+	"\x17DownloadArchiveResponse\x12\x12\n" +
+	"\x04data\x18\x01 \x01(\fR\x04data\"T\n" +
+	"\x13GetUploadURLRequest\x12\x1a\n" +
+	"\bfilename\x18\x01 \x01(\tR\bfilename\x12!\n" +
+	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\"N\n" +
+	"\x14GetUploadURLResponse\x12\x1d\n" +
+	"\n" +
+	"upload_url\x18\x01 \x01(\tR\tuploadUrl\x12\x17\n" +
+	"\afile_id\x18\x02 \x01(\tR\x06fileId2\xca\x04\n" +
 	"\x0eStorageService\x12M\n" +
 	"\n" +
 	"UploadFile\x12\x1d.storage.v2.UploadFileRequest\x1a\x1e.storage.v2.UploadFileResponse(\x01\x12D\n" +
 	"\aGetFile\x12\x1a.storage.v2.GetFileRequest\x1a\x1b.storage.v2.GetFileResponse0\x01\x12G\n" +
 	"\vGetMetadata\x12\x1e.storage.v2.GetMetadataRequest\x1a\x18.storage.v2.FileMetadata\x12H\n" +
-	"\tListFiles\x12\x1c.storage.v2.ListFilesRequest\x1a\x1d.storage.v2.ListFilesResponse\x12Z\n" +
-	"\x0fGetDownloadURLs\x12\".storage.v2.GetDownloadURLsRequest\x1a#.storage.v2.GetDownloadURLsResponseBIZGgithub.com/zarielnd/file-management-service-go/gen/storage/v2;storagev2b\x06proto3"
+	"\tListFiles\x12\x1c.storage.v2.ListFilesRequest\x1a\x1d.storage.v2.ListFilesResponse\x12a\n" +
+	"\x0fDownloadArchive\x12\".storage.v2.DownloadArchiveRequest\x1a#.storage.v2.DownloadArchiveResponse\"\x03\x88\x02\x010\x01\x12Z\n" +
+	"\x0fGetDownloadURLs\x12\".storage.v2.GetDownloadURLsRequest\x1a#.storage.v2.GetDownloadURLsResponse\x12Q\n" +
+	"\fGetUploadURL\x12\x1f.storage.v2.GetUploadURLRequest\x1a .storage.v2.GetUploadURLResponseBIZGgithub.com/zarielnd/file-management-service-go/gen/storage/v2;storagev2b\x06proto3"
 
 var (
 	file_storage_v2_storage_proto_rawDescOnce sync.Once
@@ -761,7 +966,7 @@ func file_storage_v2_storage_proto_rawDescGZIP() []byte {
 	return file_storage_v2_storage_proto_rawDescData
 }
 
-var file_storage_v2_storage_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_storage_v2_storage_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_storage_v2_storage_proto_goTypes = []any{
 	(*UploadFileRequest)(nil),       // 0: storage.v2.UploadFileRequest
 	(*FileInfo)(nil),                // 1: storage.v2.FileInfo
@@ -775,27 +980,35 @@ var file_storage_v2_storage_proto_goTypes = []any{
 	(*GetDownloadURLsRequest)(nil),  // 9: storage.v2.GetDownloadURLsRequest
 	(*FileDownloadURL)(nil),         // 10: storage.v2.FileDownloadURL
 	(*GetDownloadURLsResponse)(nil), // 11: storage.v2.GetDownloadURLsResponse
-	(*timestamppb.Timestamp)(nil),   // 12: google.protobuf.Timestamp
+	(*DownloadArchiveRequest)(nil),  // 12: storage.v2.DownloadArchiveRequest
+	(*DownloadArchiveResponse)(nil), // 13: storage.v2.DownloadArchiveResponse
+	(*GetUploadURLRequest)(nil),     // 14: storage.v2.GetUploadURLRequest
+	(*GetUploadURLResponse)(nil),    // 15: storage.v2.GetUploadURLResponse
+	(*timestamppb.Timestamp)(nil),   // 16: google.protobuf.Timestamp
 }
 var file_storage_v2_storage_proto_depIdxs = []int32{
 	1,  // 0: storage.v2.UploadFileRequest.info:type_name -> storage.v2.FileInfo
 	6,  // 1: storage.v2.UploadFileResponse.file:type_name -> storage.v2.FileMetadata
 	6,  // 2: storage.v2.GetFileResponse.metadata:type_name -> storage.v2.FileMetadata
-	12, // 3: storage.v2.FileMetadata.created_at:type_name -> google.protobuf.Timestamp
+	16, // 3: storage.v2.FileMetadata.created_at:type_name -> google.protobuf.Timestamp
 	6,  // 4: storage.v2.ListFilesResponse.files:type_name -> storage.v2.FileMetadata
 	10, // 5: storage.v2.GetDownloadURLsResponse.files:type_name -> storage.v2.FileDownloadURL
 	0,  // 6: storage.v2.StorageService.UploadFile:input_type -> storage.v2.UploadFileRequest
 	3,  // 7: storage.v2.StorageService.GetFile:input_type -> storage.v2.GetFileRequest
 	5,  // 8: storage.v2.StorageService.GetMetadata:input_type -> storage.v2.GetMetadataRequest
 	7,  // 9: storage.v2.StorageService.ListFiles:input_type -> storage.v2.ListFilesRequest
-	9,  // 10: storage.v2.StorageService.GetDownloadURLs:input_type -> storage.v2.GetDownloadURLsRequest
-	2,  // 11: storage.v2.StorageService.UploadFile:output_type -> storage.v2.UploadFileResponse
-	4,  // 12: storage.v2.StorageService.GetFile:output_type -> storage.v2.GetFileResponse
-	6,  // 13: storage.v2.StorageService.GetMetadata:output_type -> storage.v2.FileMetadata
-	8,  // 14: storage.v2.StorageService.ListFiles:output_type -> storage.v2.ListFilesResponse
-	11, // 15: storage.v2.StorageService.GetDownloadURLs:output_type -> storage.v2.GetDownloadURLsResponse
-	11, // [11:16] is the sub-list for method output_type
-	6,  // [6:11] is the sub-list for method input_type
+	12, // 10: storage.v2.StorageService.DownloadArchive:input_type -> storage.v2.DownloadArchiveRequest
+	9,  // 11: storage.v2.StorageService.GetDownloadURLs:input_type -> storage.v2.GetDownloadURLsRequest
+	14, // 12: storage.v2.StorageService.GetUploadURL:input_type -> storage.v2.GetUploadURLRequest
+	2,  // 13: storage.v2.StorageService.UploadFile:output_type -> storage.v2.UploadFileResponse
+	4,  // 14: storage.v2.StorageService.GetFile:output_type -> storage.v2.GetFileResponse
+	6,  // 15: storage.v2.StorageService.GetMetadata:output_type -> storage.v2.FileMetadata
+	8,  // 16: storage.v2.StorageService.ListFiles:output_type -> storage.v2.ListFilesResponse
+	13, // 17: storage.v2.StorageService.DownloadArchive:output_type -> storage.v2.DownloadArchiveResponse
+	11, // 18: storage.v2.StorageService.GetDownloadURLs:output_type -> storage.v2.GetDownloadURLsResponse
+	15, // 19: storage.v2.StorageService.GetUploadURL:output_type -> storage.v2.GetUploadURLResponse
+	13, // [13:20] is the sub-list for method output_type
+	6,  // [6:13] is the sub-list for method input_type
 	6,  // [6:6] is the sub-list for extension type_name
 	6,  // [6:6] is the sub-list for extension extendee
 	0,  // [0:6] is the sub-list for field type_name
@@ -816,7 +1029,7 @@ func file_storage_v2_storage_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_storage_v2_storage_proto_rawDesc), len(file_storage_v2_storage_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

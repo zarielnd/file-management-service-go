@@ -381,7 +381,7 @@ func TestFileService_List_RepositoryError(t *testing.T) {
 
 func TestFileService_DownloadArchive_Success(t *testing.T) {
 	repo := &repomock.Repository{
-		Files: []repository.File{
+		Files: []*repository.File{
 			{ID: "1", Name: "a.txt", StoragePath: "path/a"},
 			{ID: "2", Name: "b.txt", StoragePath: "path/b"},
 		},
@@ -473,7 +473,7 @@ func TestFileService_DownloadArchive_RepositoryError(t *testing.T) {
 func TestFileService_DownloadArchive_SomeFilesNotFound(t *testing.T) {
 	repo := &repomock.Repository{
 		// Only one of the two requested IDs resolved.
-		Files: []repository.File{{ID: "1", Name: "a.txt", StoragePath: "path/a"}},
+		Files: []*repository.File{{ID: "1", Name: "a.txt", StoragePath: "path/a"}},
 	}
 	storage := &storagemock.Provider{}
 	dir := t.TempDir()
@@ -500,7 +500,7 @@ func TestFileService_DownloadArchive_SomeFilesNotFound(t *testing.T) {
 
 func TestFileService_DownloadArchive_StorageErrorMidLoop(t *testing.T) {
 	repo := &repomock.Repository{
-		Files: []repository.File{
+		Files: []*repository.File{
 			{ID: "1", Name: "a.txt", StoragePath: "path/a"},
 			{ID: "2", Name: "b.txt", StoragePath: "path/b"},
 		},
@@ -541,7 +541,7 @@ func (b *brokenReader) Read(p []byte) (int, error) {
 
 func TestFileService_DownloadArchive_CopyErrorMidStream(t *testing.T) {
 	repo := &repomock.Repository{
-		Files: []repository.File{{ID: "1", Name: "a.txt", StoragePath: "path/a"}},
+		Files: []*repository.File{{ID: "1", Name: "a.txt", StoragePath: "path/a"}},
 	}
 	storage := &storagemock.Provider{
 		Readers: map[string]io.ReadCloser{
@@ -569,7 +569,7 @@ func TestFileService_DownloadArchive_CopyErrorMidStream(t *testing.T) {
 
 func TestFileService_DownloadArchive_TempFileCreationFailure(t *testing.T) {
 	repo := &repomock.Repository{
-		Files: []repository.File{{ID: "1", Name: "a.txt", StoragePath: "path/a"}},
+		Files: []*repository.File{{ID: "1", Name: "a.txt", StoragePath: "path/a"}},
 	}
 	storage := &storagemock.Provider{}
 

@@ -8,6 +8,31 @@ services:
       postgres:
         condition: service_healthy
 
+  temporal:
+    image: temporalio/auto-setup:latest
+    environment:
+      - DB=postgresql
+      - DB_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PWD=${POSTGRES_PASSWORD}
+      - POSTGRES_SEEDS=postgres
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+    ports:
+      - "7233:7233"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  temporal-ui:
+    image: temporalio/ui:latest
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+    ports:
+      - "8081:8080"
+    depends_on:
+      temporal:
+        condition: service_started
+
   file-server:
     build:
       context: .
@@ -20,9 +45,33 @@ services:
       SERVER_PORT: "8080"
       STORAGE_GRPC_TARGET: "storage-service:50051"
       MAX_UPLOAD_SIZE: "${MAX_UPLOAD_SIZE}"
+      # Feature flag + Temporal
+      USE_TEMPORAL_ARCHIVE: "${USE_TEMPORAL_ARCHIVE:-false}"
+      TEMPORAL_HOST: "temporal:7233"
+      TEMPORAL_QUEUE: "${TEMPORAL_QUEUE:-archive-queue}"
     depends_on:
+      temporal:
+        condition: service_started
       storage-service:
         condition: service_healthy
+
+  file-server-worker:
+    build:
+      context: .
+      dockerfile: services/file-server/Dockerfile.worker
+      provenance: false
+      sbom: false
+    environment:
+      STORAGE_GRPC_TARGET: "storage-service:50051"
+      TEMPORAL_HOST: "temporal:7233"
+      TEMPORAL_QUEUE: "${TEMPORAL_QUEUE:-archive-queue}"
+    depends_on:
+      temporal:
+        condition: service_started
+      storage-service:
+        condition: service_healthy
+    deploy:
+      replicas: ${WORKER_REPLICAS:-2}
 
   storage-service:
     build:
@@ -47,7 +96,6 @@ services:
       S3_SECRET_KEY: "${S3_SECRET_KEY}"
       S3_USE_PATH_STYLE: "${S3_USE_PATH_STYLE}"
     volumes:
-      # Only needed for local backend; harmless for S3
       - file-data:/data
     healthcheck:
       test: ["CMD", "/app/grpc_health_probe", "-addr=:50051"]
@@ -97,7 +145,6 @@ services:
       retries: 5
       start_period: 5s
 
-  # Optional: auto-create bucket on startup
   minio-init:
     image: minio/mc:latest
     depends_on:

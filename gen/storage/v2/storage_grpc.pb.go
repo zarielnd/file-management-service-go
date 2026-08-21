@@ -8,6 +8,7 @@ package storagev2
 
 import (
 	context "context"
+
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -23,7 +24,9 @@ const (
 	StorageService_GetFile_FullMethodName         = "/storage.v2.StorageService/GetFile"
 	StorageService_GetMetadata_FullMethodName     = "/storage.v2.StorageService/GetMetadata"
 	StorageService_ListFiles_FullMethodName       = "/storage.v2.StorageService/ListFiles"
+	StorageService_DownloadArchive_FullMethodName = "/storage.v2.StorageService/DownloadArchive"
 	StorageService_GetDownloadURLs_FullMethodName = "/storage.v2.StorageService/GetDownloadURLs"
+	StorageService_GetUploadURL_FullMethodName    = "/storage.v2.StorageService/GetUploadURL"
 )
 
 // StorageServiceClient is the client API for StorageService service.
@@ -34,8 +37,11 @@ type StorageServiceClient interface {
 	GetFile(ctx context.Context, in *GetFileRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[GetFileResponse], error)
 	GetMetadata(ctx context.Context, in *GetMetadataRequest, opts ...grpc.CallOption) (*FileMetadata, error)
 	ListFiles(ctx context.Context, in *ListFilesRequest, opts ...grpc.CallOption) (*ListFilesResponse, error)
+	// Deprecated: Do not use.
+	DownloadArchive(ctx context.Context, in *DownloadArchiveRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadArchiveResponse], error)
 	// NEW: Batch presigned URLs for Temporal worker
 	GetDownloadURLs(ctx context.Context, in *GetDownloadURLsRequest, opts ...grpc.CallOption) (*GetDownloadURLsResponse, error)
+	GetUploadURL(ctx context.Context, in *GetUploadURLRequest, opts ...grpc.CallOption) (*GetUploadURLResponse, error)
 }
 
 type storageServiceClient struct {
@@ -98,10 +104,40 @@ func (c *storageServiceClient) ListFiles(ctx context.Context, in *ListFilesReque
 	return out, nil
 }
 
+// Deprecated: Do not use.
+func (c *storageServiceClient) DownloadArchive(ctx context.Context, in *DownloadArchiveRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadArchiveResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &StorageService_ServiceDesc.Streams[2], StorageService_DownloadArchive_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[DownloadArchiveRequest, DownloadArchiveResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type StorageService_DownloadArchiveClient = grpc.ServerStreamingClient[DownloadArchiveResponse]
+
 func (c *storageServiceClient) GetDownloadURLs(ctx context.Context, in *GetDownloadURLsRequest, opts ...grpc.CallOption) (*GetDownloadURLsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetDownloadURLsResponse)
 	err := c.cc.Invoke(ctx, StorageService_GetDownloadURLs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *storageServiceClient) GetUploadURL(ctx context.Context, in *GetUploadURLRequest, opts ...grpc.CallOption) (*GetUploadURLResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetUploadURLResponse)
+	err := c.cc.Invoke(ctx, StorageService_GetUploadURL_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -116,8 +152,11 @@ type StorageServiceServer interface {
 	GetFile(*GetFileRequest, grpc.ServerStreamingServer[GetFileResponse]) error
 	GetMetadata(context.Context, *GetMetadataRequest) (*FileMetadata, error)
 	ListFiles(context.Context, *ListFilesRequest) (*ListFilesResponse, error)
+	// Deprecated: Do not use.
+	DownloadArchive(*DownloadArchiveRequest, grpc.ServerStreamingServer[DownloadArchiveResponse]) error
 	// NEW: Batch presigned URLs for Temporal worker
 	GetDownloadURLs(context.Context, *GetDownloadURLsRequest) (*GetDownloadURLsResponse, error)
+	GetUploadURL(context.Context, *GetUploadURLRequest) (*GetUploadURLResponse, error)
 	mustEmbedUnimplementedStorageServiceServer()
 }
 
@@ -140,8 +179,14 @@ func (UnimplementedStorageServiceServer) GetMetadata(context.Context, *GetMetada
 func (UnimplementedStorageServiceServer) ListFiles(context.Context, *ListFilesRequest) (*ListFilesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListFiles not implemented")
 }
+func (UnimplementedStorageServiceServer) DownloadArchive(*DownloadArchiveRequest, grpc.ServerStreamingServer[DownloadArchiveResponse]) error {
+	return status.Error(codes.Unimplemented, "method DownloadArchive not implemented")
+}
 func (UnimplementedStorageServiceServer) GetDownloadURLs(context.Context, *GetDownloadURLsRequest) (*GetDownloadURLsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetDownloadURLs not implemented")
+}
+func (UnimplementedStorageServiceServer) GetUploadURL(context.Context, *GetUploadURLRequest) (*GetUploadURLResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetUploadURL not implemented")
 }
 func (UnimplementedStorageServiceServer) mustEmbedUnimplementedStorageServiceServer() {}
 func (UnimplementedStorageServiceServer) testEmbeddedByValue()                        {}
@@ -218,6 +263,17 @@ func _StorageService_ListFiles_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StorageService_DownloadArchive_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(DownloadArchiveRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(StorageServiceServer).DownloadArchive(m, &grpc.GenericServerStream[DownloadArchiveRequest, DownloadArchiveResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type StorageService_DownloadArchiveServer = grpc.ServerStreamingServer[DownloadArchiveResponse]
+
 func _StorageService_GetDownloadURLs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetDownloadURLsRequest)
 	if err := dec(in); err != nil {
@@ -232,6 +288,24 @@ func _StorageService_GetDownloadURLs_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(StorageServiceServer).GetDownloadURLs(ctx, req.(*GetDownloadURLsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StorageService_GetUploadURL_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUploadURLRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StorageServiceServer).GetUploadURL(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StorageService_GetUploadURL_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StorageServiceServer).GetUploadURL(ctx, req.(*GetUploadURLRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -255,6 +329,10 @@ var StorageService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "GetDownloadURLs",
 			Handler:    _StorageService_GetDownloadURLs_Handler,
 		},
+		{
+			MethodName: "GetUploadURL",
+			Handler:    _StorageService_GetUploadURL_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -265,6 +343,11 @@ var StorageService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "GetFile",
 			Handler:       _StorageService_GetFile_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "DownloadArchive",
+			Handler:       _StorageService_DownloadArchive_Handler,
 			ServerStreams: true,
 		},
 	},
