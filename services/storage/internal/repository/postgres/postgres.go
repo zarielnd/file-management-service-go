@@ -129,3 +129,39 @@ func (r *Repository) List(ctx context.Context, limit, offset int) ([]*repository
 
 	return files, totalCount, nil
 }
+
+func (r *Repository) Update(ctx context.Context, file *repository.File) error {
+	query := `UPDATE files
+		SET name = $2, storage_path = $3, content_type = $4,
+		    size_bytes = $5, checksum = $6, created_at = $7
+		WHERE id = $1`
+
+	res, err := r.db.ExecContext(ctx, query,
+		file.ID, file.Name, file.StoragePath, file.ContentType,
+		file.SizeBytes, file.Checksum, file.CreatedAt)
+	if err != nil {
+		return fmt.Errorf("failed to update file: %w", err)
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check update result: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("file not found")
+	}
+	return nil
+}
+
+func (r *Repository) ConfirmUpload(ctx context.Context, id string, size int64, checksum string) error {
+	query := `UPDATE files SET size_bytes = $2, checksum = $3 WHERE id = $1`
+	res, err := r.db.ExecContext(ctx, query, id, size, checksum)
+	if err != nil {
+		return fmt.Errorf("failed to confirm upload: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("file not found")
+	}
+	return nil
+}

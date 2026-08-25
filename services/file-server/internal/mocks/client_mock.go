@@ -43,6 +43,21 @@ func (m *MockStorageClient) EXPECT() *MockStorageClientMockRecorder {
 	return m.recorder
 }
 
+// ConfirmUpload mocks base method.
+func (m *MockStorageClient) ConfirmUpload(ctx context.Context, fileID string, size int64, checksum string) (domain.File, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ConfirmUpload", ctx, fileID, size, checksum)
+	ret0, _ := ret[0].(domain.File)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ConfirmUpload indicates an expected call of ConfirmUpload.
+func (mr *MockStorageClientMockRecorder) ConfirmUpload(ctx, fileID, size, checksum any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfirmUpload", reflect.TypeOf((*MockStorageClient)(nil).ConfirmUpload), ctx, fileID, size, checksum)
+}
+
 // DownloadArchive mocks base method.
 func (m *MockStorageClient) DownloadArchive(ctx context.Context, ids []string) (io.ReadCloser, error) {
 	m.ctrl.T.Helper()

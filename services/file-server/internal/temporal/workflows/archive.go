@@ -38,42 +38,53 @@ func BulkDownloadWorkflow(ctx workflow.Context, req ArchiveRequest) (*ArchiveRes
 		return nil, fmt.Errorf("resolve files: %w", err)
 	}
 
-	// 2. Download files in parallel
-	dlCtx, _ := workflow.NewDisconnectedContext(ctx)
+	//create session to ensure parallel with only 1 worker
+	sessionCtx, err := workflow.CreateSession(ctx, &workflow.SessionOptions{
+		CreationTimeout:  time.Minute,
+		ExecutionTimeout: 30 * time.Minute,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create session: %w", err)
+	}
+	defer workflow.CompleteSession(sessionCtx)
+
+	tempDir := fmt.Sprintf("/tmp/archives/%s", req.ArchiveID)
+
+	// Always cleanup + release the session, regardless of how we exit —
+	// disconnected so cancellation of ctx/sessionCtx doesn't skip it.
+	defer func() {
+		cleanupCtx, cancel := workflow.NewDisconnectedContext(sessionCtx)
+		defer cancel()
+		_ = workflow.ExecuteActivity(cleanupCtx, activities.CleanupActivityName, tempDir).Get(cleanupCtx, nil)
+	}()
+
+	// Downloads — plain sessionCtx, so cancellation actually stops these
 	futures := make([]workflow.Future, len(resolved))
 	for i, file := range resolved {
-		futures[i] = workflow.ExecuteActivity(dlCtx, activities.DownloadFileActivityName, activities.DownloadFileInput{
+		futures[i] = workflow.ExecuteActivity(sessionCtx, activities.DownloadFileActivityName, activities.DownloadFileInput{
 			URL:      file.URL,
-			TempPath: fmt.Sprintf("/tmp/archives/%s/%s", req.ArchiveID, file.FileID),
+			TempPath: fmt.Sprintf("%s/%s", tempDir, file.FileID),
 		})
 	}
 	for i, f := range futures {
-		if err := f.Get(ctx, nil); err != nil {
+		if err := f.Get(sessionCtx, nil); err != nil {
 			return nil, fmt.Errorf("download %s: %w", resolved[i].FileID, err)
 		}
 	}
 
-	// 3. Zip
-	zipPath := fmt.Sprintf("/tmp/archives/%s/archive.zip", req.ArchiveID)
-	if err := workflow.ExecuteActivity(ctx, activities.ZipFilesActivityName, activities.ZipInput{
-		Files:      resolved,
-		TempDir:    fmt.Sprintf("/tmp/archives/%s", req.ArchiveID),
-		OutputPath: zipPath,
-	}).Get(ctx, nil); err != nil {
+	zipPath := fmt.Sprintf("%s/archive.zip", tempDir)
+	if err := workflow.ExecuteActivity(sessionCtx, activities.ZipFilesActivityName, activities.ZipInput{
+		Files: resolved, TempDir: tempDir, OutputPath: zipPath,
+	}).Get(sessionCtx, nil); err != nil {
 		return nil, fmt.Errorf("zip: %w", err)
 	}
 
-	// 4. Upload archive
 	var archiveID string
-	if err := workflow.ExecuteActivity(ctx, activities.UploadArchiveActivityName, activities.UploadArchiveInput{
-		ZipPath: zipPath,
-		Name:    fmt.Sprintf("archive-%s.zip", req.ArchiveID),
-	}).Get(ctx, &archiveID); err != nil {
+	if err := workflow.ExecuteActivity(sessionCtx, activities.UploadArchiveActivityName, activities.UploadArchiveInput{
+		ZipPath: zipPath, Name: fmt.Sprintf("archive-%s.zip", req.ArchiveID),
+	}).Get(sessionCtx, &archiveID); err != nil {
 		return nil, fmt.Errorf("upload archive: %w", err)
 	}
-
-	// 5. Cleanup
-	_ = workflow.ExecuteActivity(ctx, activities.CleanupActivityName, fmt.Sprintf("/tmp/archives/%s", req.ArchiveID)).Get(ctx, nil)
 
 	return &ArchiveResult{
 		ArchiveFileID: archiveID,

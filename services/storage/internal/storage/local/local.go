@@ -56,3 +56,8 @@ func (s *Store) PresignFetch(ctx context.Context, path string, expiry time.Durat
 	// Local dev: return internal file-server route or just error if not supported
 	return "", fmt.Errorf("presigned URLs not supported for local storage")
 }
+
+func (s *Store) PresignStore(ctx context.Context, path string, expiry time.Duration) (string, error) {
+	// Local dev: return internal file-server route or just error if not supported
+	return "", fmt.Errorf("presigned URLs not supported for local storage")
+}

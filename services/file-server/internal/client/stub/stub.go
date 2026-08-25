@@ -71,3 +71,6 @@ func (c *StorageClient) GetDownloadURLs(ctx context.Context, ids []string) ([]cl
 func (c *StorageClient) GetUploadURL(ctx context.Context, filename, contentType string) (client.UploadURL, error) {
 	return client.UploadURL{}, nil
 }
+func (c *StorageClient) ConfirmUpload(ctx context.Context, fileID string, size int64, checksum string) (domain.File, error) {
+	return domain.File{}, nil
+}

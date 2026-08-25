@@ -3,6 +3,8 @@ package activities
 import (
 	"archive/zip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,56 +12,35 @@ import (
 	"path/filepath"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-
-	storagev2 "github.com/zarielnd/file-management-service-go/gen/storage/v2"
+	"github.com/zarielnd/file-management-service-go/services/file-server/internal/client"
 )
 
 type Activities struct {
-	storageAddr string
-	httpClient  *http.Client
+	storageClient client.StorageClient
+	httpClient    *http.Client
 }
 
-func NewActivities(storageAddr string) *Activities {
+func NewActivities(storageClient client.StorageClient) *Activities {
 	return &Activities{
-		storageAddr: storageAddr,
-		httpClient:  &http.Client{Timeout: 5 * time.Minute},
+		storageClient: storageClient,
+		httpClient:    &http.Client{Timeout: 5 * time.Minute},
 	}
-}
-
-func (a *Activities) storageClient(ctx context.Context) (storagev2.StorageServiceClient, func(), error) {
-	conn, err := grpc.DialContext(ctx, a.storageAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
-	)
-	if err != nil {
-		return nil, nil, err
-	}
-	closeFn := func() { conn.Close() }
-	return storagev2.NewStorageServiceClient(conn), closeFn, nil
 }
 
 // Activity 1: Resolve presigned URLs via Storage Service gRPC
 func (a *Activities) ResolveFilesActivity(ctx context.Context, fileIDs []string) ([]ResolvedFile, error) {
-	client, closeFn, err := a.storageClient(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer closeFn()
-
-	resp, err := client.GetDownloadURLs(ctx, &storagev2.GetDownloadURLsRequest{FileIds: fileIDs})
+	urls, err := a.storageClient.GetDownloadURLs(ctx, fileIDs)
 	if err != nil {
 		return nil, fmt.Errorf("GetDownloadURLs: %w", err)
 	}
 
 	var out []ResolvedFile
-	for _, f := range resp.Files {
+	for _, u := range urls { // urls is []client.DownloadURL, not urls.Files
 		out = append(out, ResolvedFile{
-			FileID:    f.FileId,
-			Name:      f.Name,
-			URL:       f.Url,
-			SizeBytes: f.SizeBytes,
+			FileID:    u.FileID,
+			Name:      u.Name,
+			URL:       u.URL,
+			SizeBytes: u.SizeBytes,
 		})
 	}
 	return out, nil
@@ -134,24 +115,54 @@ func (a *Activities) ZipFilesActivity(ctx context.Context, input ZipInput) error
 
 // Activity 4: Upload final archive back to Storage Service via gRPC streaming
 func (a *Activities) UploadArchiveActivity(ctx context.Context, input UploadArchiveInput) (string, error) {
-	// 1. Get presigned PUT URL from Storage Service (lightweight gRPC)
+	// 2. Get presigned PUT URL from Storage Service (interface method)
 	resp, err := a.storageClient.GetUploadURL(ctx, input.Name, "application/zip")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("GetUploadURL: %w", err)
 	}
 
-	// 2. Upload zip directly to S3 via HTTP PUT
-	zipFile, _ := os.Open(input.ZipPath)
-	req, _ := http.NewRequestWithContext(ctx, http.MethodPut, resp.UploadUrl, zipFile)
+	// 3. Open and upload zip directly to S3 via HTTP PUT
+	zipFile, err := os.Open(input.ZipPath)
+	if err != nil {
+		return "", fmt.Errorf("open zip: %w", err)
+	}
+	defer zipFile.Close()
+
+	stat, err := zipFile.Stat()
+	if err != nil {
+		return "", fmt.Errorf("stat zip: %w", err)
+	}
+
+	hash := sha256.New()
+	tee := io.TeeReader(zipFile, hash)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, resp.UploadURL, tee)
+	if err != nil {
+		return "", fmt.Errorf("create upload request: %w", err)
+	}
 	req.Header.Set("Content-Type", "application/zip")
+	req.ContentLength = stat.Size()
 
 	httpResp, err := a.httpClient.Do(req)
-	if err != nil || httpResp.StatusCode != 200 {
-		return "", fmt.Errorf("upload failed")
+	if err != nil {
+		return "", fmt.Errorf("upload http: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(httpResp.Body)
+		return "", fmt.Errorf("upload failed: %d %s", httpResp.StatusCode, string(body))
 	}
 
-	// 3. Return the file ID so user can download it later
-	return resp.FileId, nil
+	checksum := hex.EncodeToString(hash.Sum(nil))
+
+	_, err = a.storageClient.ConfirmUpload(ctx, resp.FileID, stat.Size(), checksum)
+	if err != nil {
+		return "", fmt.Errorf("confirm upload: %w", err)
+	}
+
+	// 4. Return the file ID so user can download it later
+	return resp.FileID, nil
 }
 
 // Activity 5: Cleanup temp files

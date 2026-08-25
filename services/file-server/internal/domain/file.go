@@ -7,5 +7,6 @@ type File struct {
 	Name        string
 	Size        int64
 	ContentType string
+	Checksum    string
 	CreatedAt   time.Time
 }

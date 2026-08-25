@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 
+	"github.com/zarielnd/file-management-service-go/services/file-server/internal/client/grpc"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/config"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/temporal/activities"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/temporal/workflows"
@@ -24,9 +25,14 @@ func main() {
 	}
 	defer c.Close()
 
-	w := worker.New(c, cfg.TemporalQueue, worker.Options{})
+	w := worker.New(c, cfg.TemporalQueue, worker.Options{EnableSessionWorker: true})
 
-	acts := activities.NewActivities(cfg.StorageGRPCTarget)
+	storageClient, closeConn, err := grpc.NewStorageClient(cfg.StorageGRPCTarget)
+	if err != nil {
+		log.Fatalf("failed to connect to storage service: %v", err)
+	}
+	defer closeConn()
+	acts := activities.NewActivities(storageClient)
 	w.RegisterWorkflow(workflows.BulkDownloadWorkflow)
 	w.RegisterActivity(acts)
 

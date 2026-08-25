@@ -202,6 +202,18 @@ func (c *storageClient) GetUploadURL(ctx context.Context, filename, contentType 
 	}, nil
 }
 
+func (c *storageClient) ConfirmUpload(ctx context.Context, fileID string, size int64, checksum string) (domain.File, error) {
+	resp, err := c.client.ConfirmUpload(ctx, &storagev2.ConfirmUploadRequest{
+		FileId:    fileID,
+		SizeBytes: size,
+		Checksum:  checksum,
+	})
+	if err != nil {
+		return domain.File{}, mapGRPCError(err)
+	}
+	return protoToDomain(resp), nil
+}
+
 func mapGRPCError(err error) error {
 	st, ok := status.FromError(err)
 	if !ok {
@@ -224,6 +236,7 @@ func protoToDomain(f *storagev2.FileMetadata) domain.File {
 		Name:        f.Name,
 		Size:        f.Size,
 		ContentType: f.ContentType,
+		Checksum:    f.Checksum,
 		CreatedAt:   t,
 	}
 }

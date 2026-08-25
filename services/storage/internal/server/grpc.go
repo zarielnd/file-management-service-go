@@ -182,7 +182,7 @@ func (s *GRPCServer) GetDownloadURLs(ctx context.Context, req *storagev2.GetDown
 
 	resp := &storagev2.GetDownloadURLsResponse{}
 	for _, f := range files {
-		url, err := s.service.PresignFetch(ctx, f.StoragePath, 15*time.Minute)
+		url, err := s.service.PresignFetch(ctx, f.ID, 15*time.Minute)
 		if err != nil {
 			return nil, status.Error(codes.Internal, fmt.Sprintf("presign %s: %v", f.ID, err))
 		}
@@ -197,19 +197,29 @@ func (s *GRPCServer) GetDownloadURLs(ctx context.Context, req *storagev2.GetDown
 }
 
 func (s *GRPCServer) GetUploadURL(ctx context.Context, req *storagev2.GetUploadURLRequest) (*storagev2.GetUploadURLResponse, error) {
-	file, err := s.service.ReserveUpload(ctx, req.Filename, req.ContentType)
+	file, url, err := s.service.ReserveUpload(ctx, req.Filename, req.ContentType)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return &storagev2.GetUploadURLResponse{
+		UploadUrl: url,
+		FileId:    file.ID,
+	}, nil
+}
+
+func (s *GRPCServer) ConfirmUpload(ctx context.Context, req *storagev2.ConfirmUploadRequest) (*storagev2.FileMetadata, error) {
+	file, err := s.service.ConfirmUpload(ctx, req.FileId, req.SizeBytes, req.Checksum)
 	if err != nil {
 		return nil, mapError(err)
 	}
 
-	url, err := s.service.PresignStore(ctx, file.StoragePath, 15*time.Minute)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-
-	return &storagev2.GetUploadURLResponse{
-		UploadUrl: url,
-		FileId:    file.ID,
+	return &storagev2.FileMetadata{
+		Id:          file.ID,
+		Name:        file.Name,
+		Size:        file.SizeBytes,
+		ContentType: file.ContentType,
+		Checksum:    file.Checksum,
+		CreatedAt:   timestamppb.New(file.CreatedAt),
 	}, nil
 }
 

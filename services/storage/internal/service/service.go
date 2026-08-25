@@ -168,7 +168,15 @@ func (s *FileService) PresignFetch(ctx context.Context, id string, expiry time.D
 	return s.storage.PresignFetch(ctx, file.StoragePath, expiry)
 }
 
-func (s *FileService) ReserveUpload(ctx context.Context, name, contentType string) (repository.File, error) {
+func (s *FileService) PresignStore(ctx context.Context, id string, expiry time.Duration) (string, error) {
+	file, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch file metadata: %w", err)
+	}
+	return s.storage.PresignStore(ctx, file.StoragePath, expiry)
+}
+
+func (s *FileService) ReserveUpload(ctx context.Context, name, contentType string) (*repository.File, string, error) {
 	id := uuid.Must(uuid.NewV7()).String()
 	storagePath := s.makePath(id, name)
 
@@ -180,9 +188,22 @@ func (s *FileService) ReserveUpload(ctx context.Context, name, contentType strin
 		CreatedAt:   time.Now().UTC(),
 	}
 	if err := s.repo.Create(ctx, &file); err != nil {
-		return repository.File{}, fmt.Errorf("failed to reserve file: %w", err)
+		return &repository.File{}, "", fmt.Errorf("reserve: %w", err)
 	}
-	return file, nil
+
+	url, err := s.storage.PresignStore(ctx, storagePath, 15*time.Minute)
+	if err != nil {
+		return &repository.File{}, "", fmt.Errorf("presign: %w", err)
+	}
+
+	return &file, url, nil
+}
+
+func (s *FileService) ConfirmUpload(ctx context.Context, id string, size int64, checksum string) (*repository.File, error) {
+	if err := s.repo.ConfirmUpload(ctx, id, size, checksum); err != nil {
+		return &repository.File{}, err
+	}
+	return s.repo.GetByID(ctx, id) // fetch updated row
 }
 
 // helper

@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/client"
+	"github.com/zarielnd/file-management-service-go/services/file-server/internal/config"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/domain"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/mocks"
 	"go.uber.org/mock/gomock"
@@ -25,7 +26,7 @@ func TestFileHandler_Upload(t *testing.T) {
 	t.Run("success single file", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		mockSvc := mocks.NewMockFileService(ctrl)
-		h := NewFileHandler(mockSvc, 32<<20)
+		h := NewFileHandler(mockSvc, &config.Config{UseTemporalArchive: false}, 32<<20)
 
 		mockSvc.EXPECT().Upload(gomock.Any(), gomock.Any()).DoAndReturn(
 			func(_ context.Context, in client.UploadInput) (domain.File, error) {
@@ -98,7 +99,7 @@ func TestFileHandler_Upload(t *testing.T) {
 	t.Run("no files", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		mockSvc := mocks.NewMockFileService(ctrl)
-		h := NewFileHandler(mockSvc, 32<<20)
+		h := NewFileHandler(mockSvc, &config.Config{UseTemporalArchive: false}, 32<<20)
 
 		var body bytes.Buffer
 		writer := multipart.NewWriter(&body)
@@ -118,7 +119,7 @@ func TestFileHandler_Upload(t *testing.T) {
 	t.Run("service error", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		mockSvc := mocks.NewMockFileService(ctrl)
-		h := NewFileHandler(mockSvc, 32<<20)
+		h := NewFileHandler(mockSvc, &config.Config{UseTemporalArchive: false}, 32<<20)
 
 		mockSvc.EXPECT().Upload(gomock.Any(), gomock.Any()).Return(
 			domain.File{}, errors.New("storage fail"),
@@ -148,7 +149,7 @@ func TestFileHandler_Download(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		mockSvc := mocks.NewMockFileService(ctrl)
-		h := NewFileHandler(mockSvc, 32<<20)
+		h := NewFileHandler(mockSvc, &config.Config{UseTemporalArchive: false}, 32<<20)
 
 		mockSvc.EXPECT().Download(gomock.Any(), "abc").Return(
 			io.NopCloser(strings.NewReader("file content")),
@@ -185,7 +186,7 @@ func TestFileHandler_Download(t *testing.T) {
 	t.Run("missing id", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		mockSvc := mocks.NewMockFileService(ctrl)
-		h := NewFileHandler(mockSvc, 32<<20)
+		h := NewFileHandler(mockSvc, &config.Config{UseTemporalArchive: false}, 32<<20)
 
 		req := httptest.NewRequest(http.MethodGet, "/files/", nil)
 		req.SetPathValue("id", "")
@@ -201,7 +202,7 @@ func TestFileHandler_Download(t *testing.T) {
 	t.Run("service error", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		mockSvc := mocks.NewMockFileService(ctrl)
-		h := NewFileHandler(mockSvc, 32<<20)
+		h := NewFileHandler(mockSvc, &config.Config{UseTemporalArchive: false}, 32<<20)
 
 		mockSvc.EXPECT().Download(gomock.Any(), "missing").Return(
 			nil, domain.File{}, errors.New("not found"),
@@ -273,7 +274,7 @@ func TestFileHandler_List(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockSvc := mocks.NewMockFileService(ctrl)
-			h := NewFileHandler(mockSvc, 32<<20)
+			h := NewFileHandler(mockSvc, &config.Config{UseTemporalArchive: false}, 32<<20)
 
 			tt.mockSetup(mockSvc)
 
@@ -372,7 +373,7 @@ func TestFileHandler_DownloadMultiple(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockSvc := mocks.NewMockFileService(ctrl)
 
-			h := NewFileHandler(mockSvc, 32<<20)
+			h := NewFileHandler(mockSvc, &config.Config{UseTemporalArchive: false}, 32<<20)
 
 			if tt.mockSetup != nil {
 				tt.mockSetup(mockSvc)
@@ -476,7 +477,7 @@ func TestFileHandler_Metadata(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockSvc := mocks.NewMockFileService(ctrl)
-			h := NewFileHandler(mockSvc, 32<<20)
+			h := NewFileHandler(mockSvc, &config.Config{UseTemporalArchive: false}, 32<<20)
 
 			if tt.mockSetup != nil {
 				tt.mockSetup(mockSvc)

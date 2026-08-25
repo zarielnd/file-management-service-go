@@ -20,4 +20,6 @@ type Repository interface {
 	GetByID(ctx context.Context, id string) (*File, error)
 	GetByIDs(ctx context.Context, ids []string) ([]*File, error)
 	List(ctx context.Context, limit, offset int) ([]*File, int, error)
+	Update(ctx context.Context, file *File) error
+	ConfirmUpload(ctx context.Context, id string, size int64, checksum string) error
 }

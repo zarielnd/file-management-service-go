@@ -7,7 +7,9 @@ option go_package = "github.com/zarielnd/file-management-service-go/gen/storage/
 import "google/protobuf/timestamp.proto";
 
 service StorageService {
-  rpc UploadFile(stream UploadFileRequest) returns (UploadFileResponse);
+  rpc UploadFile(stream UploadFileRequest) returns (UploadFileResponse){
+    option deprecated = true;
+  };
   rpc GetFile(GetFileRequest) returns (stream GetFileResponse);
   rpc GetMetadata(GetMetadataRequest) returns (FileMetadata);
   rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
@@ -17,6 +19,7 @@ service StorageService {
   // NEW: Batch presigned URLs for Temporal worker
   rpc GetDownloadURLs(GetDownloadURLsRequest) returns (GetDownloadURLsResponse);
   rpc GetUploadURL(GetUploadURLRequest) returns (GetUploadURLResponse);
+  rpc ConfirmUpload(ConfirmUploadRequest) returns (FileMetadata);
 }
 
 message UploadFileRequest {
@@ -77,7 +80,7 @@ message FileDownloadURL {
   string file_id = 1;
   string name = 2;
   string url = 3;           // presigned URL
-  int64 size_bytes = 4; 
+  int64 size_bytes = 4;
 }
 
 message GetDownloadURLsResponse {
@@ -100,4 +103,10 @@ message GetUploadURLRequest {
 message GetUploadURLResponse {
   string upload_url = 1;
   string file_id = 2;
+}
+
+message ConfirmUploadRequest {
+  string file_id = 1;
+  int64 size_bytes = 2;
+  string checksum = 3;
 }

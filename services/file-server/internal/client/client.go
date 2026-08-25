@@ -34,4 +34,5 @@ type StorageClient interface {
 	DownloadArchive(ctx context.Context, ids []string) (io.ReadCloser, error)
 	GetDownloadURLs(ctx context.Context, ids []string) ([]DownloadURL, error)
 	GetUploadURL(ctx context.Context, filename, contentType string) (UploadURL, error)
+	ConfirmUpload(ctx context.Context, fileID string, size int64, checksum string) (domain.File, error)
 }
