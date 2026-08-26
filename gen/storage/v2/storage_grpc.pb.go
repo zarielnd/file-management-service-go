@@ -19,14 +19,16 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	StorageService_UploadFile_FullMethodName      = "/storage.v2.StorageService/UploadFile"
-	StorageService_GetFile_FullMethodName         = "/storage.v2.StorageService/GetFile"
-	StorageService_GetMetadata_FullMethodName     = "/storage.v2.StorageService/GetMetadata"
-	StorageService_ListFiles_FullMethodName       = "/storage.v2.StorageService/ListFiles"
-	StorageService_DownloadArchive_FullMethodName = "/storage.v2.StorageService/DownloadArchive"
-	StorageService_GetDownloadURLs_FullMethodName = "/storage.v2.StorageService/GetDownloadURLs"
-	StorageService_GetUploadURL_FullMethodName    = "/storage.v2.StorageService/GetUploadURL"
-	StorageService_ConfirmUpload_FullMethodName   = "/storage.v2.StorageService/ConfirmUpload"
+	StorageService_UploadFile_FullMethodName            = "/storage.v2.StorageService/UploadFile"
+	StorageService_GetFile_FullMethodName               = "/storage.v2.StorageService/GetFile"
+	StorageService_GetMetadata_FullMethodName           = "/storage.v2.StorageService/GetMetadata"
+	StorageService_ListFiles_FullMethodName             = "/storage.v2.StorageService/ListFiles"
+	StorageService_DownloadArchive_FullMethodName       = "/storage.v2.StorageService/DownloadArchive"
+	StorageService_GetDownloadURLs_FullMethodName       = "/storage.v2.StorageService/GetDownloadURLs"
+	StorageService_GetUploadURL_FullMethodName          = "/storage.v2.StorageService/GetUploadURL"
+	StorageService_ConfirmUpload_FullMethodName         = "/storage.v2.StorageService/ConfirmUpload"
+	StorageService_GetArchiveUploadURL_FullMethodName   = "/storage.v2.StorageService/GetArchiveUploadURL"
+	StorageService_GetArchiveDownloadURL_FullMethodName = "/storage.v2.StorageService/GetArchiveDownloadURL"
 )
 
 // StorageServiceClient is the client API for StorageService service.
@@ -44,6 +46,8 @@ type StorageServiceClient interface {
 	GetDownloadURLs(ctx context.Context, in *GetDownloadURLsRequest, opts ...grpc.CallOption) (*GetDownloadURLsResponse, error)
 	GetUploadURL(ctx context.Context, in *GetUploadURLRequest, opts ...grpc.CallOption) (*GetUploadURLResponse, error)
 	ConfirmUpload(ctx context.Context, in *ConfirmUploadRequest, opts ...grpc.CallOption) (*FileMetadata, error)
+	GetArchiveUploadURL(ctx context.Context, in *GetArchiveUploadURLRequest, opts ...grpc.CallOption) (*GetArchiveUploadURLResponse, error)
+	GetArchiveDownloadURL(ctx context.Context, in *GetArchiveDownloadURLRequest, opts ...grpc.CallOption) (*GetArchiveDownloadURLResponse, error)
 }
 
 type storageServiceClient struct {
@@ -157,6 +161,26 @@ func (c *storageServiceClient) ConfirmUpload(ctx context.Context, in *ConfirmUpl
 	return out, nil
 }
 
+func (c *storageServiceClient) GetArchiveUploadURL(ctx context.Context, in *GetArchiveUploadURLRequest, opts ...grpc.CallOption) (*GetArchiveUploadURLResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetArchiveUploadURLResponse)
+	err := c.cc.Invoke(ctx, StorageService_GetArchiveUploadURL_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *storageServiceClient) GetArchiveDownloadURL(ctx context.Context, in *GetArchiveDownloadURLRequest, opts ...grpc.CallOption) (*GetArchiveDownloadURLResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetArchiveDownloadURLResponse)
+	err := c.cc.Invoke(ctx, StorageService_GetArchiveDownloadURL_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // StorageServiceServer is the server API for StorageService service.
 // All implementations must embed UnimplementedStorageServiceServer
 // for forward compatibility.
@@ -172,6 +196,8 @@ type StorageServiceServer interface {
 	GetDownloadURLs(context.Context, *GetDownloadURLsRequest) (*GetDownloadURLsResponse, error)
 	GetUploadURL(context.Context, *GetUploadURLRequest) (*GetUploadURLResponse, error)
 	ConfirmUpload(context.Context, *ConfirmUploadRequest) (*FileMetadata, error)
+	GetArchiveUploadURL(context.Context, *GetArchiveUploadURLRequest) (*GetArchiveUploadURLResponse, error)
+	GetArchiveDownloadURL(context.Context, *GetArchiveDownloadURLRequest) (*GetArchiveDownloadURLResponse, error)
 	mustEmbedUnimplementedStorageServiceServer()
 }
 
@@ -205,6 +231,12 @@ func (UnimplementedStorageServiceServer) GetUploadURL(context.Context, *GetUploa
 }
 func (UnimplementedStorageServiceServer) ConfirmUpload(context.Context, *ConfirmUploadRequest) (*FileMetadata, error) {
 	return nil, status.Error(codes.Unimplemented, "method ConfirmUpload not implemented")
+}
+func (UnimplementedStorageServiceServer) GetArchiveUploadURL(context.Context, *GetArchiveUploadURLRequest) (*GetArchiveUploadURLResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetArchiveUploadURL not implemented")
+}
+func (UnimplementedStorageServiceServer) GetArchiveDownloadURL(context.Context, *GetArchiveDownloadURLRequest) (*GetArchiveDownloadURLResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetArchiveDownloadURL not implemented")
 }
 func (UnimplementedStorageServiceServer) mustEmbedUnimplementedStorageServiceServer() {}
 func (UnimplementedStorageServiceServer) testEmbeddedByValue()                        {}
@@ -346,6 +378,42 @@ func _StorageService_ConfirmUpload_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StorageService_GetArchiveUploadURL_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetArchiveUploadURLRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StorageServiceServer).GetArchiveUploadURL(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StorageService_GetArchiveUploadURL_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StorageServiceServer).GetArchiveUploadURL(ctx, req.(*GetArchiveUploadURLRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _StorageService_GetArchiveDownloadURL_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetArchiveDownloadURLRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StorageServiceServer).GetArchiveDownloadURL(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StorageService_GetArchiveDownloadURL_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StorageServiceServer).GetArchiveDownloadURL(ctx, req.(*GetArchiveDownloadURLRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // StorageService_ServiceDesc is the grpc.ServiceDesc for StorageService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -372,6 +440,14 @@ var StorageService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ConfirmUpload",
 			Handler:    _StorageService_ConfirmUpload_Handler,
+		},
+		{
+			MethodName: "GetArchiveUploadURL",
+			Handler:    _StorageService_GetArchiveUploadURL_Handler,
+		},
+		{
+			MethodName: "GetArchiveDownloadURL",
+			Handler:    _StorageService_GetArchiveDownloadURL_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

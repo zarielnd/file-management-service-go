@@ -214,6 +214,27 @@ func (c *storageClient) ConfirmUpload(ctx context.Context, fileID string, size i
 	return protoToDomain(resp), nil
 }
 
+func (c *storageClient) GetArchiveUploadURL(ctx context.Context, path, contentType string) (string, error) {
+	resp, err := c.client.GetArchiveUploadURL(ctx, &storagev2.GetArchiveUploadURLRequest{
+		Path:        path,
+		ContentType: contentType,
+	})
+	if err != nil {
+		return "", mapGRPCError(err)
+	}
+	return resp.UploadUrl, nil
+}
+
+func (c *storageClient) GetArchiveDownloadURL(ctx context.Context, path string) (string, error) {
+	resp, err := c.client.GetArchiveDownloadURL(ctx, &storagev2.GetArchiveDownloadURLRequest{
+		Path: path,
+	})
+	if err != nil {
+		return "", mapGRPCError(err)
+	}
+	return resp.DownloadUrl, nil
+}
+
 func mapGRPCError(err error) error {
 	st, ok := status.FromError(err)
 	if !ok {

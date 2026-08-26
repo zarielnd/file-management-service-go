@@ -11,4 +11,6 @@ type Provider interface {
 	Fetch(ctx context.Context, path string) (io.ReadCloser, error)
 	PresignFetch(ctx context.Context, path string, expiry time.Duration) (string, error)
 	PresignStore(ctx context.Context, path string, expiry time.Duration) (string, error)
+	PresignArchiveStore(ctx context.Context, path string, contentType string, expiry time.Duration) (string, error)
+	PresignArchiveFetch(ctx context.Context, path string, expiry time.Duration) (string, error)
 }

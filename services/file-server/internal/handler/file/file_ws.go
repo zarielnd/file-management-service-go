@@ -1,7 +1,9 @@
 package file
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 
@@ -36,7 +38,6 @@ func (h *ArchiveWSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		log.Printf("ws upgrade: %v", err)
 		return
 	}
-	defer conn.Close()
 
 	// Context cancels if client disconnects
 	ctx, cancel := context.WithCancel(r.Context())
@@ -44,37 +45,50 @@ func (h *ArchiveWSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Goroutine: detect client disconnect by reading from WS
 	go func() {
+		defer conn.Close()
 		for {
 			_, _, err := conn.ReadMessage()
 			if err != nil {
-				cancel() // stop waiting for workflow
+				cancel()
 				return
 			}
 		}
 	}()
 
-	// Block until workflow completes
+	// Block until workflow completes (or client disconnects)
 	run := h.temporalClient.GetWorkflow(ctx, workflowID, "")
 	var result workflows.ArchiveResult
 	err = run.Get(ctx, &result)
 
-	// Client disconnected while waiting
+	// Client disconnected
 	if ctx.Err() != nil {
 		return
 	}
 
 	// Workflow failed
 	if err != nil {
-		conn.WriteJSON(map[string]string{
+		writeJSON(conn, map[string]string{
 			"event":   "error",
 			"message": err.Error(),
 		})
 		return
 	}
 
-	// Success
-	conn.WriteJSON(map[string]string{
-		"event":      "completed",
-		"archive_id": result.ArchiveFileID,
-	})
+	// Success: send result
+	if err := writeJSON(conn, map[string]string{
+		"event":        "completed",
+		"download_url": result.DownloadURL,
+	}); err != nil {
+		return
+	}
+}
+
+func writeJSON(conn *websocket.Conn, v interface{}) error {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return err
+	}
+	return conn.WriteMessage(websocket.TextMessage, buf.Bytes())
 }

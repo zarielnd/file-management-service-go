@@ -20,6 +20,9 @@ service StorageService {
   rpc GetDownloadURLs(GetDownloadURLsRequest) returns (GetDownloadURLsResponse);
   rpc GetUploadURL(GetUploadURLRequest) returns (GetUploadURLResponse);
   rpc ConfirmUpload(ConfirmUploadRequest) returns (FileMetadata);
+
+  rpc GetArchiveUploadURL(GetArchiveUploadURLRequest) returns (GetArchiveUploadURLResponse);
+  rpc GetArchiveDownloadURL(GetArchiveDownloadURLRequest) returns (GetArchiveDownloadURLResponse);
 }
 
 message UploadFileRequest {
@@ -109,4 +112,22 @@ message ConfirmUploadRequest {
   string file_id = 1;
   int64 size_bytes = 2;
   string checksum = 3;
+}
+
+message GetArchiveUploadURLRequest {
+  string path = 1;        // e.g. "archives/{archive-id}.zip"
+  string content_type = 2;
+}
+
+message GetArchiveUploadURLResponse {
+  string upload_url = 1;
+  string path = 2;
+}
+
+message GetArchiveDownloadURLRequest {
+  string path = 1;
+}
+
+message GetArchiveDownloadURLResponse {
+  string download_url = 1;
 }

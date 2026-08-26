@@ -18,12 +18,14 @@ type Config struct {
 	TempPath    string
 
 	// S3 / MinIO (only used when StorageBackend == "s3")
-	S3Endpoint     string
-	S3Region       string
-	S3Bucket       string
-	S3AccessKey    string
-	S3SecretKey    string
-	S3UsePathStyle bool // true for MinIO/LocalStack
+	S3Endpoint       string
+	S3PublicEndpoint string
+	S3Region         string
+	S3Bucket         string
+	S3ArchiveBucket  string
+	S3AccessKey      string
+	S3SecretKey      string
+	S3UsePathStyle   bool // true for MinIO/LocalStack
 
 	DBConnectionString string
 }
@@ -40,12 +42,14 @@ func Load() (*Config, error) {
 		TempPath:    getEnv("TEMP_PATH", "./data/temp"),
 
 		// S3
-		S3Endpoint:     getEnv("S3_ENDPOINT", ""),
-		S3Region:       getEnv("S3_REGION", "us-east-1"),
-		S3Bucket:       getEnv("S3_BUCKET", ""),
-		S3AccessKey:    getEnv("S3_ACCESS_KEY", ""),
-		S3SecretKey:    getEnv("S3_SECRET_KEY", ""),
-		S3UsePathStyle: getEnv("S3_USE_PATH_STYLE", "true") == "true",
+		S3Endpoint:       getEnv("S3_ENDPOINT", ""),
+		S3PublicEndpoint: getEnv("S3_PUBLIC_ENDPOINT", ""),
+		S3Region:         getEnv("S3_REGION", "us-east-1"),
+		S3Bucket:         getEnv("S3_BUCKET", ""),
+		S3ArchiveBucket:  getEnv("S3_ARCHIVE_BUCKET", ""),
+		S3AccessKey:      getEnv("S3_ACCESS_KEY", ""),
+		S3SecretKey:      getEnv("S3_SECRET_KEY", ""),
+		S3UsePathStyle:   getEnv("S3_USE_PATH_STYLE", "true") == "true",
 
 		DBConnectionString: getEnv("DATABASE_URL", ""),
 	}

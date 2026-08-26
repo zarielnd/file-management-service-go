@@ -15,19 +15,24 @@ import (
 )
 
 type Store struct {
-	client     *s3.Client
-	bucket     string
-	basePrefix string
+	client                *s3.Client        // internal SDK ops (actual HTTP to minio:9000)
+	internalPresignClient *s3.PresignClient // presigned URLs with minio:9000 (worker use)
+	externalPresignClient *s3.PresignClient // presigned URLs with localhost:9000 (browser use)
+	bucket                string
+	archiveBucket         string
+	basePrefix            string
 }
 
 type Config struct {
-	Endpoint     string
-	Region       string
-	Bucket       string
-	AccessKey    string
-	SecretKey    string
-	UsePathStyle bool
-	BasePrefix   string
+	Endpoint       string
+	PublicEndpoint string
+	Region         string
+	Bucket         string
+	ArchiveBucket  string
+	AccessKey      string
+	SecretKey      string
+	UsePathStyle   bool
+	BasePrefix     string
 }
 
 func NewStore(ctx context.Context, cfg Config) (*Store, error) {
@@ -43,6 +48,7 @@ func NewStore(ctx context.Context, cfg Config) (*Store, error) {
 		return nil, fmt.Errorf("failed to load AWS config: %w", err)
 	}
 
+	// Internal client — actual HTTP calls to MinIO from inside Docker
 	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 		o.UsePathStyle = cfg.UsePathStyle
 		if cfg.Endpoint != "" {
@@ -57,10 +63,35 @@ func NewStore(ctx context.Context, cfg Config) (*Store, error) {
 		return nil, fmt.Errorf("failed to access bucket %s: %w", cfg.Bucket, err)
 	}
 
+	if cfg.ArchiveBucket == "" {
+		return nil, fmt.Errorf("archive bucket is required")
+	}
+	_, err = client.HeadBucket(ctx, &s3.HeadBucketInput{
+		Bucket: aws.String(cfg.ArchiveBucket),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to access archive bucket %s: %w", cfg.ArchiveBucket, err)
+	}
+
+	// External client — only for generating browser-facing presigned URLs
+	externalS3Client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+		o.UsePathStyle = cfg.UsePathStyle
+		if cfg.PublicEndpoint != "" {
+			o.BaseEndpoint = aws.String(cfg.PublicEndpoint)
+		} else if cfg.Endpoint != "" {
+			o.BaseEndpoint = aws.String(cfg.Endpoint)
+		}
+		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+		o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
+	})
+
 	return &Store{
-		client:     client,
-		bucket:     cfg.Bucket,
-		basePrefix: cfg.BasePrefix,
+		client:                client,
+		internalPresignClient: s3.NewPresignClient(client),
+		externalPresignClient: s3.NewPresignClient(externalS3Client),
+		bucket:                cfg.Bucket,
+		archiveBucket:         cfg.ArchiveBucket,
+		basePrefix:            cfg.BasePrefix,
 	}, nil
 }
 
@@ -107,10 +138,10 @@ func (s *Store) Fetch(ctx context.Context, path string) (io.ReadCloser, error) {
 	return out.Body, nil
 }
 
+// PresignFetch — used by GetDownloadURLs (worker downloads files). Internal endpoint.
 func (s *Store) PresignFetch(ctx context.Context, path string, expiry time.Duration) (string, error) {
 	key := s.key(path)
-	presignClient := s3.NewPresignClient(s.client)
-	req, err := presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
+	req, err := s.internalPresignClient.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
 	}, s3.WithPresignExpires(expiry))
@@ -120,16 +151,47 @@ func (s *Store) PresignFetch(ctx context.Context, path string, expiry time.Durat
 	return req.URL, nil
 }
 
+// PresignStore — used by ReserveUpload (file-server gets URL for client upload). Internal endpoint.
 func (s *Store) PresignStore(ctx context.Context, path string, expiry time.Duration) (string, error) {
 	key := s.key(path)
-	presignClient := s3.NewPresignClient(s.client)
-	req, err := presignClient.PresignPutObject(ctx, &s3.PutObjectInput{
+	req, err := s.internalPresignClient.PresignPutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(s.bucket),
 		Key:         aws.String(key),
 		ContentType: aws.String("application/octet-stream"),
 	}, s3.WithPresignExpires(expiry))
 	if err != nil {
 		return "", fmt.Errorf("failed to presign PUT s3://%s/%s: %w", s.bucket, key, err)
+	}
+	return req.URL, nil
+}
+
+// PresignArchiveStore — used by GetArchiveUploadURL (worker uploads archive). Internal endpoint.
+func (s *Store) PresignArchiveStore(ctx context.Context, path string, contentType string, expiry time.Duration) (string, error) {
+	key := s.key(path)
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	req, err := s.internalPresignClient.PresignPutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(s.archiveBucket),
+		Key:         aws.String(key),
+		ContentType: aws.String(contentType),
+	}, s3.WithPresignExpires(expiry))
+	if err != nil {
+		return "", fmt.Errorf("failed to presign archive PUT s3://%s/%s: %w", s.archiveBucket, key, err)
+	}
+	return req.URL, nil
+}
+
+// PresignArchiveFetch — used by GetArchiveDownloadURL (browser downloads archive). External endpoint.
+func (s *Store) PresignArchiveFetch(ctx context.Context, path string, expiry time.Duration) (string, error) {
+	key := s.key(path)
+	req, err := s.externalPresignClient.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.archiveBucket),
+		Key:    aws.String(key),
+	}, s3.WithPresignExpires(expiry))
+	if err != nil {
+		return "", fmt.Errorf("failed to presign archive GET s3://%s/%s: %w", s.archiveBucket, key, err)
 	}
 	return req.URL, nil
 }

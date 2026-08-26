@@ -3,8 +3,6 @@ package activities
 import (
 	"archive/zip"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -114,14 +112,17 @@ func (a *Activities) ZipFilesActivity(ctx context.Context, input ZipInput) error
 }
 
 // Activity 4: Upload final archive back to Storage Service via gRPC streaming
+// Activity 4: Upload archive to short-lived storage and return presigned download URL
 func (a *Activities) UploadArchiveActivity(ctx context.Context, input UploadArchiveInput) (string, error) {
-	// 2. Get presigned PUT URL from Storage Service (interface method)
-	resp, err := a.storageClient.GetUploadURL(ctx, input.Name, "application/zip")
+	archivePath := fmt.Sprintf("archives/%s", input.Name)
+
+	// 1. Get presigned PUT URL for archive bucket (no DB record)
+	uploadURL, err := a.storageClient.GetArchiveUploadURL(ctx, archivePath, "application/zip")
 	if err != nil {
-		return "", fmt.Errorf("GetUploadURL: %w", err)
+		return "", fmt.Errorf("get archive upload url: %w", err)
 	}
 
-	// 3. Open and upload zip directly to S3 via HTTP PUT
+	// 2. Upload zip directly to S3/MinIO archive bucket via HTTP PUT
 	zipFile, err := os.Open(input.ZipPath)
 	if err != nil {
 		return "", fmt.Errorf("open zip: %w", err)
@@ -133,10 +134,7 @@ func (a *Activities) UploadArchiveActivity(ctx context.Context, input UploadArch
 		return "", fmt.Errorf("stat zip: %w", err)
 	}
 
-	hash := sha256.New()
-	tee := io.TeeReader(zipFile, hash)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, resp.UploadURL, tee)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, uploadURL, zipFile)
 	if err != nil {
 		return "", fmt.Errorf("create upload request: %w", err)
 	}
@@ -154,15 +152,13 @@ func (a *Activities) UploadArchiveActivity(ctx context.Context, input UploadArch
 		return "", fmt.Errorf("upload failed: %d %s", httpResp.StatusCode, string(body))
 	}
 
-	checksum := hex.EncodeToString(hash.Sum(nil))
-
-	_, err = a.storageClient.ConfirmUpload(ctx, resp.FileID, stat.Size(), checksum)
+	// 3. Get presigned GET URL from archive bucket (no DB lookup needed)
+	downloadURL, err := a.storageClient.GetArchiveDownloadURL(ctx, archivePath)
 	if err != nil {
-		return "", fmt.Errorf("confirm upload: %w", err)
+		return "", fmt.Errorf("get archive download url: %w", err)
 	}
 
-	// 4. Return the file ID so user can download it later
-	return resp.FileID, nil
+	return downloadURL, nil
 }
 
 // Activity 5: Cleanup temp files

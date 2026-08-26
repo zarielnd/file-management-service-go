@@ -16,8 +16,7 @@ type ArchiveRequest struct {
 }
 
 type ArchiveResult struct {
-	ArchiveFileID string `json:"archive_file_id"`
-	SizeBytes     int64  `json:"size_bytes"`
+	DownloadURL string `json:"download_url"` // was ArchiveFileID
 }
 
 func BulkDownloadWorkflow(ctx workflow.Context, req ArchiveRequest) (*ArchiveResult, error) {
@@ -79,14 +78,14 @@ func BulkDownloadWorkflow(ctx workflow.Context, req ArchiveRequest) (*ArchiveRes
 		return nil, fmt.Errorf("zip: %w", err)
 	}
 
-	var archiveID string
+	var url string
 	if err := workflow.ExecuteActivity(sessionCtx, activities.UploadArchiveActivityName, activities.UploadArchiveInput{
 		ZipPath: zipPath, Name: fmt.Sprintf("archive-%s.zip", req.ArchiveID),
-	}).Get(sessionCtx, &archiveID); err != nil {
+	}).Get(sessionCtx, &url); err != nil {
 		return nil, fmt.Errorf("upload archive: %w", err)
 	}
 
 	return &ArchiveResult{
-		ArchiveFileID: archiveID,
+		DownloadURL: url,
 	}, nil
 }

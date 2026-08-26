@@ -223,6 +223,26 @@ func (s *GRPCServer) ConfirmUpload(ctx context.Context, req *storagev2.ConfirmUp
 	}, nil
 }
 
+func (s *GRPCServer) GetArchiveUploadURL(ctx context.Context, req *storagev2.GetArchiveUploadURLRequest) (*storagev2.GetArchiveUploadURLResponse, error) {
+	url, err := s.service.PresignArchiveStore(ctx, req.Path, req.ContentType)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return &storagev2.GetArchiveUploadURLResponse{
+		UploadUrl: url,
+		Path:      req.Path,
+	}, nil
+}
+
+func (s *GRPCServer) GetArchiveDownloadURL(ctx context.Context, req *storagev2.GetArchiveDownloadURLRequest) (*storagev2.GetArchiveDownloadURLResponse, error) {
+	url, err := s.service.PresignArchiveFetch(ctx, req.Path)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return &storagev2.GetArchiveDownloadURLResponse{
+		DownloadUrl: url,
+	}, nil
+}
 func mapError(err error) error {
 	// TODO: inspect error types and map properly
 	return status.Error(codes.Internal, err.Error())

@@ -945,6 +945,198 @@ func (x *ConfirmUploadRequest) GetChecksum() string {
 	return ""
 }
 
+type GetArchiveUploadURLRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"` // e.g. "archives/{archive-id}.zip"
+	ContentType   string                 `protobuf:"bytes,2,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetArchiveUploadURLRequest) Reset() {
+	*x = GetArchiveUploadURLRequest{}
+	mi := &file_storage_v2_storage_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetArchiveUploadURLRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetArchiveUploadURLRequest) ProtoMessage() {}
+
+func (x *GetArchiveUploadURLRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_v2_storage_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetArchiveUploadURLRequest.ProtoReflect.Descriptor instead.
+func (*GetArchiveUploadURLRequest) Descriptor() ([]byte, []int) {
+	return file_storage_v2_storage_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *GetArchiveUploadURLRequest) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *GetArchiveUploadURLRequest) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
+}
+
+type GetArchiveUploadURLResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UploadUrl     string                 `protobuf:"bytes,1,opt,name=upload_url,json=uploadUrl,proto3" json:"upload_url,omitempty"`
+	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetArchiveUploadURLResponse) Reset() {
+	*x = GetArchiveUploadURLResponse{}
+	mi := &file_storage_v2_storage_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetArchiveUploadURLResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetArchiveUploadURLResponse) ProtoMessage() {}
+
+func (x *GetArchiveUploadURLResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_v2_storage_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetArchiveUploadURLResponse.ProtoReflect.Descriptor instead.
+func (*GetArchiveUploadURLResponse) Descriptor() ([]byte, []int) {
+	return file_storage_v2_storage_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *GetArchiveUploadURLResponse) GetUploadUrl() string {
+	if x != nil {
+		return x.UploadUrl
+	}
+	return ""
+}
+
+func (x *GetArchiveUploadURLResponse) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+type GetArchiveDownloadURLRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetArchiveDownloadURLRequest) Reset() {
+	*x = GetArchiveDownloadURLRequest{}
+	mi := &file_storage_v2_storage_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetArchiveDownloadURLRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetArchiveDownloadURLRequest) ProtoMessage() {}
+
+func (x *GetArchiveDownloadURLRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_v2_storage_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetArchiveDownloadURLRequest.ProtoReflect.Descriptor instead.
+func (*GetArchiveDownloadURLRequest) Descriptor() ([]byte, []int) {
+	return file_storage_v2_storage_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *GetArchiveDownloadURLRequest) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+type GetArchiveDownloadURLResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DownloadUrl   string                 `protobuf:"bytes,1,opt,name=download_url,json=downloadUrl,proto3" json:"download_url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetArchiveDownloadURLResponse) Reset() {
+	*x = GetArchiveDownloadURLResponse{}
+	mi := &file_storage_v2_storage_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetArchiveDownloadURLResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetArchiveDownloadURLResponse) ProtoMessage() {}
+
+func (x *GetArchiveDownloadURLResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_storage_v2_storage_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetArchiveDownloadURLResponse.ProtoReflect.Descriptor instead.
+func (*GetArchiveDownloadURLResponse) Descriptor() ([]byte, []int) {
+	return file_storage_v2_storage_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *GetArchiveDownloadURLResponse) GetDownloadUrl() string {
+	if x != nil {
+		return x.DownloadUrl
+	}
+	return ""
+}
+
 var File_storage_v2_storage_proto protoreflect.FileDescriptor
 
 const file_storage_v2_storage_proto_rawDesc = "" +
@@ -1008,7 +1200,18 @@ const file_storage_v2_storage_proto_rawDesc = "" +
 	"\afile_id\x18\x01 \x01(\tR\x06fileId\x12\x1d\n" +
 	"\n" +
 	"size_bytes\x18\x02 \x01(\x03R\tsizeBytes\x12\x1a\n" +
-	"\bchecksum\x18\x03 \x01(\tR\bchecksum2\x9c\x05\n" +
+	"\bchecksum\x18\x03 \x01(\tR\bchecksum\"S\n" +
+	"\x1aGetArchiveUploadURLRequest\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12!\n" +
+	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\"P\n" +
+	"\x1bGetArchiveUploadURLResponse\x12\x1d\n" +
+	"\n" +
+	"upload_url\x18\x01 \x01(\tR\tuploadUrl\x12\x12\n" +
+	"\x04path\x18\x02 \x01(\tR\x04path\"2\n" +
+	"\x1cGetArchiveDownloadURLRequest\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\"B\n" +
+	"\x1dGetArchiveDownloadURLResponse\x12!\n" +
+	"\fdownload_url\x18\x01 \x01(\tR\vdownloadUrl2\xf2\x06\n" +
 	"\x0eStorageService\x12R\n" +
 	"\n" +
 	"UploadFile\x12\x1d.storage.v2.UploadFileRequest\x1a\x1e.storage.v2.UploadFileResponse\"\x03\x88\x02\x01(\x01\x12D\n" +
@@ -1018,7 +1221,9 @@ const file_storage_v2_storage_proto_rawDesc = "" +
 	"\x0fDownloadArchive\x12\".storage.v2.DownloadArchiveRequest\x1a#.storage.v2.DownloadArchiveResponse\"\x03\x88\x02\x010\x01\x12Z\n" +
 	"\x0fGetDownloadURLs\x12\".storage.v2.GetDownloadURLsRequest\x1a#.storage.v2.GetDownloadURLsResponse\x12Q\n" +
 	"\fGetUploadURL\x12\x1f.storage.v2.GetUploadURLRequest\x1a .storage.v2.GetUploadURLResponse\x12K\n" +
-	"\rConfirmUpload\x12 .storage.v2.ConfirmUploadRequest\x1a\x18.storage.v2.FileMetadataBIZGgithub.com/zarielnd/file-management-service-go/gen/storage/v2;storagev2b\x06proto3"
+	"\rConfirmUpload\x12 .storage.v2.ConfirmUploadRequest\x1a\x18.storage.v2.FileMetadata\x12f\n" +
+	"\x13GetArchiveUploadURL\x12&.storage.v2.GetArchiveUploadURLRequest\x1a'.storage.v2.GetArchiveUploadURLResponse\x12l\n" +
+	"\x15GetArchiveDownloadURL\x12(.storage.v2.GetArchiveDownloadURLRequest\x1a).storage.v2.GetArchiveDownloadURLResponseBIZGgithub.com/zarielnd/file-management-service-go/gen/storage/v2;storagev2b\x06proto3"
 
 var (
 	file_storage_v2_storage_proto_rawDescOnce sync.Once
@@ -1032,32 +1237,36 @@ func file_storage_v2_storage_proto_rawDescGZIP() []byte {
 	return file_storage_v2_storage_proto_rawDescData
 }
 
-var file_storage_v2_storage_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_storage_v2_storage_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_storage_v2_storage_proto_goTypes = []any{
-	(*UploadFileRequest)(nil),       // 0: storage.v2.UploadFileRequest
-	(*FileInfo)(nil),                // 1: storage.v2.FileInfo
-	(*UploadFileResponse)(nil),      // 2: storage.v2.UploadFileResponse
-	(*GetFileRequest)(nil),          // 3: storage.v2.GetFileRequest
-	(*GetFileResponse)(nil),         // 4: storage.v2.GetFileResponse
-	(*GetMetadataRequest)(nil),      // 5: storage.v2.GetMetadataRequest
-	(*FileMetadata)(nil),            // 6: storage.v2.FileMetadata
-	(*ListFilesRequest)(nil),        // 7: storage.v2.ListFilesRequest
-	(*ListFilesResponse)(nil),       // 8: storage.v2.ListFilesResponse
-	(*GetDownloadURLsRequest)(nil),  // 9: storage.v2.GetDownloadURLsRequest
-	(*FileDownloadURL)(nil),         // 10: storage.v2.FileDownloadURL
-	(*GetDownloadURLsResponse)(nil), // 11: storage.v2.GetDownloadURLsResponse
-	(*DownloadArchiveRequest)(nil),  // 12: storage.v2.DownloadArchiveRequest
-	(*DownloadArchiveResponse)(nil), // 13: storage.v2.DownloadArchiveResponse
-	(*GetUploadURLRequest)(nil),     // 14: storage.v2.GetUploadURLRequest
-	(*GetUploadURLResponse)(nil),    // 15: storage.v2.GetUploadURLResponse
-	(*ConfirmUploadRequest)(nil),    // 16: storage.v2.ConfirmUploadRequest
-	(*timestamppb.Timestamp)(nil),   // 17: google.protobuf.Timestamp
+	(*UploadFileRequest)(nil),             // 0: storage.v2.UploadFileRequest
+	(*FileInfo)(nil),                      // 1: storage.v2.FileInfo
+	(*UploadFileResponse)(nil),            // 2: storage.v2.UploadFileResponse
+	(*GetFileRequest)(nil),                // 3: storage.v2.GetFileRequest
+	(*GetFileResponse)(nil),               // 4: storage.v2.GetFileResponse
+	(*GetMetadataRequest)(nil),            // 5: storage.v2.GetMetadataRequest
+	(*FileMetadata)(nil),                  // 6: storage.v2.FileMetadata
+	(*ListFilesRequest)(nil),              // 7: storage.v2.ListFilesRequest
+	(*ListFilesResponse)(nil),             // 8: storage.v2.ListFilesResponse
+	(*GetDownloadURLsRequest)(nil),        // 9: storage.v2.GetDownloadURLsRequest
+	(*FileDownloadURL)(nil),               // 10: storage.v2.FileDownloadURL
+	(*GetDownloadURLsResponse)(nil),       // 11: storage.v2.GetDownloadURLsResponse
+	(*DownloadArchiveRequest)(nil),        // 12: storage.v2.DownloadArchiveRequest
+	(*DownloadArchiveResponse)(nil),       // 13: storage.v2.DownloadArchiveResponse
+	(*GetUploadURLRequest)(nil),           // 14: storage.v2.GetUploadURLRequest
+	(*GetUploadURLResponse)(nil),          // 15: storage.v2.GetUploadURLResponse
+	(*ConfirmUploadRequest)(nil),          // 16: storage.v2.ConfirmUploadRequest
+	(*GetArchiveUploadURLRequest)(nil),    // 17: storage.v2.GetArchiveUploadURLRequest
+	(*GetArchiveUploadURLResponse)(nil),   // 18: storage.v2.GetArchiveUploadURLResponse
+	(*GetArchiveDownloadURLRequest)(nil),  // 19: storage.v2.GetArchiveDownloadURLRequest
+	(*GetArchiveDownloadURLResponse)(nil), // 20: storage.v2.GetArchiveDownloadURLResponse
+	(*timestamppb.Timestamp)(nil),         // 21: google.protobuf.Timestamp
 }
 var file_storage_v2_storage_proto_depIdxs = []int32{
 	1,  // 0: storage.v2.UploadFileRequest.info:type_name -> storage.v2.FileInfo
 	6,  // 1: storage.v2.UploadFileResponse.file:type_name -> storage.v2.FileMetadata
 	6,  // 2: storage.v2.GetFileResponse.metadata:type_name -> storage.v2.FileMetadata
-	17, // 3: storage.v2.FileMetadata.created_at:type_name -> google.protobuf.Timestamp
+	21, // 3: storage.v2.FileMetadata.created_at:type_name -> google.protobuf.Timestamp
 	6,  // 4: storage.v2.ListFilesResponse.files:type_name -> storage.v2.FileMetadata
 	10, // 5: storage.v2.GetDownloadURLsResponse.files:type_name -> storage.v2.FileDownloadURL
 	0,  // 6: storage.v2.StorageService.UploadFile:input_type -> storage.v2.UploadFileRequest
@@ -1068,16 +1277,20 @@ var file_storage_v2_storage_proto_depIdxs = []int32{
 	9,  // 11: storage.v2.StorageService.GetDownloadURLs:input_type -> storage.v2.GetDownloadURLsRequest
 	14, // 12: storage.v2.StorageService.GetUploadURL:input_type -> storage.v2.GetUploadURLRequest
 	16, // 13: storage.v2.StorageService.ConfirmUpload:input_type -> storage.v2.ConfirmUploadRequest
-	2,  // 14: storage.v2.StorageService.UploadFile:output_type -> storage.v2.UploadFileResponse
-	4,  // 15: storage.v2.StorageService.GetFile:output_type -> storage.v2.GetFileResponse
-	6,  // 16: storage.v2.StorageService.GetMetadata:output_type -> storage.v2.FileMetadata
-	8,  // 17: storage.v2.StorageService.ListFiles:output_type -> storage.v2.ListFilesResponse
-	13, // 18: storage.v2.StorageService.DownloadArchive:output_type -> storage.v2.DownloadArchiveResponse
-	11, // 19: storage.v2.StorageService.GetDownloadURLs:output_type -> storage.v2.GetDownloadURLsResponse
-	15, // 20: storage.v2.StorageService.GetUploadURL:output_type -> storage.v2.GetUploadURLResponse
-	6,  // 21: storage.v2.StorageService.ConfirmUpload:output_type -> storage.v2.FileMetadata
-	14, // [14:22] is the sub-list for method output_type
-	6,  // [6:14] is the sub-list for method input_type
+	17, // 14: storage.v2.StorageService.GetArchiveUploadURL:input_type -> storage.v2.GetArchiveUploadURLRequest
+	19, // 15: storage.v2.StorageService.GetArchiveDownloadURL:input_type -> storage.v2.GetArchiveDownloadURLRequest
+	2,  // 16: storage.v2.StorageService.UploadFile:output_type -> storage.v2.UploadFileResponse
+	4,  // 17: storage.v2.StorageService.GetFile:output_type -> storage.v2.GetFileResponse
+	6,  // 18: storage.v2.StorageService.GetMetadata:output_type -> storage.v2.FileMetadata
+	8,  // 19: storage.v2.StorageService.ListFiles:output_type -> storage.v2.ListFilesResponse
+	13, // 20: storage.v2.StorageService.DownloadArchive:output_type -> storage.v2.DownloadArchiveResponse
+	11, // 21: storage.v2.StorageService.GetDownloadURLs:output_type -> storage.v2.GetDownloadURLsResponse
+	15, // 22: storage.v2.StorageService.GetUploadURL:output_type -> storage.v2.GetUploadURLResponse
+	6,  // 23: storage.v2.StorageService.ConfirmUpload:output_type -> storage.v2.FileMetadata
+	18, // 24: storage.v2.StorageService.GetArchiveUploadURL:output_type -> storage.v2.GetArchiveUploadURLResponse
+	20, // 25: storage.v2.StorageService.GetArchiveDownloadURL:output_type -> storage.v2.GetArchiveDownloadURLResponse
+	16, // [16:26] is the sub-list for method output_type
+	6,  // [6:16] is the sub-list for method input_type
 	6,  // [6:6] is the sub-list for extension type_name
 	6,  // [6:6] is the sub-list for extension extendee
 	0,  // [0:6] is the sub-list for field type_name
@@ -1098,7 +1311,7 @@ func file_storage_v2_storage_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_storage_v2_storage_proto_rawDesc), len(file_storage_v2_storage_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   17,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

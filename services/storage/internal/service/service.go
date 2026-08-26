@@ -206,6 +206,14 @@ func (s *FileService) ConfirmUpload(ctx context.Context, id string, size int64, 
 	return s.repo.GetByID(ctx, id) // fetch updated row
 }
 
+func (s *FileService) PresignArchiveStore(ctx context.Context, path string, contentType string) (string, error) {
+	return s.storage.PresignArchiveStore(ctx, path, contentType, 15*time.Minute)
+}
+
+func (s *FileService) PresignArchiveFetch(ctx context.Context, path string) (string, error) {
+	return s.storage.PresignArchiveFetch(ctx, path, 15*time.Minute)
+}
+
 // helper
 type deleteOnClose struct {
 	*os.File
