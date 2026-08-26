@@ -1,14 +1,17 @@
+//go:generate mockgen -source=file.go -destination=../../mocks/file_service_mock.go -package=mocks
 package file
 
 import (
 	"context"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/apperror"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/client"
+	"github.com/zarielnd/file-management-service-go/services/file-server/internal/config"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/domain"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/httpx"
 )
@@ -19,16 +22,19 @@ type FileService interface {
 	List(ctx context.Context, page, pageSize int) ([]domain.File, int, error)
 	DownloadMultiple(ctx context.Context, ids []string) (io.ReadCloser, error)
 	Metadata(ctx context.Context, id string) (domain.File, error)
+	StartArchiveWorkflow(ctx context.Context, ids []string) (archiveID string, wsEndpoint string, err error)
 }
 
 type FileHandler struct {
-	service FileService
+	service            FileService
+	cfg                *config.Config
 	maxMultipartMemory int64
 }
 
-func NewFileHandler(fileService FileService, maxMultipartMemory int64) *FileHandler {
+func NewFileHandler(fileService FileService, cfg *config.Config, maxMultipartMemory int64) *FileHandler {
 	return &FileHandler{
-		service: fileService,
+		service:            fileService,
+		cfg:                cfg,
 		maxMultipartMemory: maxMultipartMemory,
 	}
 }
@@ -75,7 +81,7 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"files": results})
 }
 
-func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request){
+func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
 		httpx.WriteError(w, apperror.Invalid("missing file ID"))
@@ -92,11 +98,18 @@ func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request){
 	w.Header().Set("Content-Type", file.ContentType)
 	w.Header().Set("Content-Disposition", `attachment; filename="`+file.Name+`"`)
 	w.Header().Set("Content-Length", strconv.FormatInt(file.Size, 10))
-	io.Copy(w, reader)
-	w.WriteHeader(http.StatusOK)
+
+	// Copy and handle error
+	if _, err := io.Copy(w, reader); err != nil {
+		// Response already partially written; can't change status code
+		// But at least log it
+		log.Printf("download copy error: %v", err)
+		return
+	}
+	// NO w.WriteHeader here — io.Copy already flushed 200 OK
 }
 
-func (h *FileHandler) List(w http.ResponseWriter, r *http.Request){
+func (h *FileHandler) List(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	pageSize, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
 
@@ -124,19 +137,37 @@ func (h *FileHandler) List(w http.ResponseWriter, r *http.Request){
 
 }
 
-func (h *FileHandler) DownloadMultiple(w http.ResponseWriter, r *http.Request){
+func (h *FileHandler) DownloadMultiple(w http.ResponseWriter, r *http.Request) {
 	var req downloadMultipleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpx.WriteError(w, apperror.Invalid("invalid JSON body"))
 		return
 	}
-
 	if len(req.IDs) == 0 {
 		httpx.WriteError(w, apperror.Invalid("file_ids cannot be empty"))
 		return
 	}
 
-	reader, err := h.service.DownloadMultiple(r.Context(), req.IDs)
+	if !h.cfg.UseTemporalArchive {
+		h.downloadMultipleSync(w, r, req.IDs)
+		return
+	}
+
+	archiveID, wsEndpoint, err := h.service.StartArchiveWorkflow(r.Context(), req.IDs)
+	if err != nil {
+		httpx.WriteError(w, apperror.Internal("failed to start archive"))
+		return
+	}
+
+	httpx.WriteJSON(w, http.StatusAccepted, map[string]any{
+		"archive_id":  archiveID,
+		"ws_endpoint": wsEndpoint,
+	})
+}
+
+// Sync fallback (deprecated, kept for feature flag = false)
+func (h *FileHandler) downloadMultipleSync(w http.ResponseWriter, r *http.Request, ids []string) {
+	reader, err := h.service.DownloadMultiple(r.Context(), ids)
 	if err != nil {
 		httpx.WriteError(w, err)
 		return
@@ -146,10 +177,8 @@ func (h *FileHandler) DownloadMultiple(w http.ResponseWriter, r *http.Request){
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", `attachment; filename="files.zip"`)
 	io.Copy(w, reader)
-	w.WriteHeader(http.StatusOK)
 }
-
-func (h *FileHandler) Metadata(w http.ResponseWriter, r *http.Request){
+func (h *FileHandler) Metadata(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
 		httpx.WriteError(w, apperror.Invalid("missing file ID"))

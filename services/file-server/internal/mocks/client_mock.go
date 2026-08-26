@@ -43,6 +43,21 @@ func (m *MockStorageClient) EXPECT() *MockStorageClientMockRecorder {
 	return m.recorder
 }
 
+// ConfirmUpload mocks base method.
+func (m *MockStorageClient) ConfirmUpload(ctx context.Context, fileID string, size int64, checksum string) (domain.File, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ConfirmUpload", ctx, fileID, size, checksum)
+	ret0, _ := ret[0].(domain.File)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ConfirmUpload indicates an expected call of ConfirmUpload.
+func (mr *MockStorageClientMockRecorder) ConfirmUpload(ctx, fileID, size, checksum any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfirmUpload", reflect.TypeOf((*MockStorageClient)(nil).ConfirmUpload), ctx, fileID, size, checksum)
+}
+
 // DownloadArchive mocks base method.
 func (m *MockStorageClient) DownloadArchive(ctx context.Context, ids []string) (io.ReadCloser, error) {
 	m.ctrl.T.Helper()
@@ -72,6 +87,66 @@ func (m *MockStorageClient) Fetch(ctx context.Context, id string) (io.ReadCloser
 func (mr *MockStorageClientMockRecorder) Fetch(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Fetch", reflect.TypeOf((*MockStorageClient)(nil).Fetch), ctx, id)
+}
+
+// GetArchiveDownloadURL mocks base method.
+func (m *MockStorageClient) GetArchiveDownloadURL(ctx context.Context, path string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetArchiveDownloadURL", ctx, path)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetArchiveDownloadURL indicates an expected call of GetArchiveDownloadURL.
+func (mr *MockStorageClientMockRecorder) GetArchiveDownloadURL(ctx, path any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetArchiveDownloadURL", reflect.TypeOf((*MockStorageClient)(nil).GetArchiveDownloadURL), ctx, path)
+}
+
+// GetArchiveUploadURL mocks base method.
+func (m *MockStorageClient) GetArchiveUploadURL(ctx context.Context, path, contentType string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetArchiveUploadURL", ctx, path, contentType)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetArchiveUploadURL indicates an expected call of GetArchiveUploadURL.
+func (mr *MockStorageClientMockRecorder) GetArchiveUploadURL(ctx, path, contentType any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetArchiveUploadURL", reflect.TypeOf((*MockStorageClient)(nil).GetArchiveUploadURL), ctx, path, contentType)
+}
+
+// GetDownloadURLs mocks base method.
+func (m *MockStorageClient) GetDownloadURLs(ctx context.Context, ids []string) ([]client.DownloadURL, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDownloadURLs", ctx, ids)
+	ret0, _ := ret[0].([]client.DownloadURL)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDownloadURLs indicates an expected call of GetDownloadURLs.
+func (mr *MockStorageClientMockRecorder) GetDownloadURLs(ctx, ids any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDownloadURLs", reflect.TypeOf((*MockStorageClient)(nil).GetDownloadURLs), ctx, ids)
+}
+
+// GetUploadURL mocks base method.
+func (m *MockStorageClient) GetUploadURL(ctx context.Context, filename, contentType string) (client.UploadURL, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUploadURL", ctx, filename, contentType)
+	ret0, _ := ret[0].(client.UploadURL)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUploadURL indicates an expected call of GetUploadURL.
+func (mr *MockStorageClientMockRecorder) GetUploadURL(ctx, filename, contentType any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUploadURL", reflect.TypeOf((*MockStorageClient)(nil).GetUploadURL), ctx, filename, contentType)
 }
 
 // List mocks base method.

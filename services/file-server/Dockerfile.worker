@@ -1,0 +1,37 @@
+# syntax=docker/dockerfile:1
+
+FROM golang:1.26.5-alpine AS builder
+
+WORKDIR /build
+
+RUN apk add --no-cache git ca-certificates
+
+# Copy the gen module FIRST (required by replace directive)
+COPY gen/ ./gen/
+
+# Copy file-server module files
+COPY services/file-server/go.mod services/file-server/go.sum ./services/file-server/
+WORKDIR /build/services/file-server
+
+# Now this works because ../../gen resolves to /build/gen
+RUN go mod download
+
+# Copy file-server source
+COPY services/file-server/ .
+
+# Build worker binary
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /bin/worker ./cmd/worker
+
+# ============================
+# Final stage
+# ============================
+FROM gcr.io/distroless/static-debian12:nonroot
+
+WORKDIR /app
+
+COPY --from=builder /bin/worker /app/worker
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+USER nonroot:nonroot
+
+ENTRYPOINT ["/app/worker"]

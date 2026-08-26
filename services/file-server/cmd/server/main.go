@@ -10,9 +10,10 @@ import (
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/handler/file"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/handler/health"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/service"
+	"go.temporal.io/sdk/client"
 )
 
-func main(){
+func main() {
 
 	config, err := config.Load()
 	if err != nil {
@@ -25,9 +26,17 @@ func main(){
 	}
 	defer closeConn()
 
-	fileSvc := service.NewFileService(storageClient, config.MaxUploadSize)
+	// Create Temporal client
+	temporalClient, err := client.Dial(client.Options{
+		HostPort: config.TemporalHost,
+	})
+	if err != nil {
+		log.Fatalf("failed to connect to temporal: %v", err)
+	}
+	defer temporalClient.Close()
 
-	fileHandler := file.NewFileHandler(fileSvc, config.MaxMultipartMemory)
+	fileSvc := service.NewFileService(storageClient, temporalClient, config.TemporalQueue, config.MaxUploadSize)
+	fileHandler := file.NewFileHandler(fileSvc, config, config.MaxMultipartMemory)
 	healthHandler := health.NewHealthHandler()
 
 	mux := http.NewServeMux()
@@ -35,12 +44,17 @@ func main(){
 	// Health
 	mux.HandleFunc("GET /health", healthHandler.Health)
 
+	archiveWS := file.NewArchiveWSHandler(temporalClient)
+
 	// Files
 	mux.HandleFunc("POST /files", fileHandler.Upload)
 	mux.HandleFunc("GET /files", fileHandler.List)
 	mux.HandleFunc("GET /files/{id}/download", fileHandler.Download)
 	mux.HandleFunc("POST /files/download-many", fileHandler.DownloadMultiple)
 	mux.HandleFunc("GET /files/{id}/metadata", fileHandler.Metadata)
+
+	//web socket
+	mux.HandleFunc("GET /api/archives/{id}/ws", archiveWS.ServeHTTP)
 
 	server := &http.Server{
 		Addr:    ":" + config.ServerPort,
@@ -55,11 +69,11 @@ func main(){
 }
 
 func stripTrailingSlash(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        if r.URL.Path != "/" && strings.HasSuffix(r.URL.Path, "/") {
-            http.Redirect(w, r, strings.TrimSuffix(r.URL.Path, "/"), http.StatusMovedPermanently)
-            return
-        }
-        next.ServeHTTP(w, r)
-    })
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" && strings.HasSuffix(r.URL.Path, "/") {
+			http.Redirect(w, r, strings.TrimSuffix(r.URL.Path, "/"), http.StatusMovedPermanently)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }

@@ -8,6 +8,30 @@ services:
       postgres:
         condition: service_healthy
 
+  temporal:
+    image: temporalio/auto-setup:latest
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PWD=${POSTGRES_PASSWORD}
+      - POSTGRES_SEEDS=postgres
+    ports:
+      - "7233:7233"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  temporal-ui:
+    image: temporalio/ui:latest
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+    ports:
+      - "8081:8080"
+    depends_on:
+      temporal:
+        condition: service_started
+
   file-server:
     build:
       context: .
@@ -20,9 +44,33 @@ services:
       SERVER_PORT: "8080"
       STORAGE_GRPC_TARGET: "storage-service:50051"
       MAX_UPLOAD_SIZE: "${MAX_UPLOAD_SIZE}"
+      # Feature flag + Temporal
+      USE_TEMPORAL_ARCHIVE: "${USE_TEMPORAL_ARCHIVE:-false}"
+      TEMPORAL_HOST: "temporal:7233"
+      TEMPORAL_QUEUE: "${TEMPORAL_QUEUE:-archive-queue}"
     depends_on:
+      temporal:
+        condition: service_started
       storage-service:
         condition: service_healthy
+
+  file-server-worker:
+    build:
+      context: .
+      dockerfile: services/file-server/Dockerfile.worker
+      provenance: false
+      sbom: false
+    environment:
+      STORAGE_GRPC_TARGET: "storage-service:50051"
+      TEMPORAL_HOST: "temporal:7233"
+      TEMPORAL_QUEUE: "${TEMPORAL_QUEUE:-archive-queue}"
+    depends_on:
+      temporal:
+        condition: service_started
+      storage-service:
+        condition: service_healthy
+    deploy:
+      replicas: ${WORKER_REPLICAS:-2}
 
   storage-service:
     build:
@@ -34,8 +82,20 @@ services:
       - "${HOST_GRPC_PORT:-50051}:50051"
     environment:
       GRPC_PORT: "50051"
-      STORAGE_PATH: "${STORAGE_PATH}"
       DATABASE_URL: "${DATABASE_URL}"
+      STORAGE_BACKEND: "${STORAGE_BACKEND}"
+      # Local
+      STORAGE_PATH: "${STORAGE_PATH}"
+      TEMP_PATH: "${TEMP_PATH}"
+      # S3
+      S3_ENDPOINT: "${S3_ENDPOINT}"
+      S3_PUBLIC_ENDPOINT: "${S3_PUBLIC_ENDPOINT}"
+      S3_REGION: "${S3_REGION}"
+      S3_BUCKET: "${S3_BUCKET}"
+      S3_ARCHIVE_BUCKET: "${S3_ARCHIVE_BUCKET}"
+      S3_ACCESS_KEY: "${S3_ACCESS_KEY}"
+      S3_SECRET_KEY: "${S3_SECRET_KEY}"
+      S3_USE_PATH_STYLE: "${S3_USE_PATH_STYLE}"
     volumes:
       - file-data:/data
     healthcheck:
@@ -48,6 +108,8 @@ services:
       migrate:
         condition: service_completed_successfully
       postgres:
+        condition: service_healthy
+      minio:
         condition: service_healthy
 
   postgres:
@@ -66,6 +128,39 @@ services:
       timeout: 5s
       retries: 5
 
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: "${S3_ACCESS_KEY}"
+      MINIO_ROOT_PASSWORD: "${S3_SECRET_KEY}"
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${S3_ACCESS_KEY} ${S3_SECRET_KEY} &&
+      mc mb local/${S3_BUCKET} --ignore-existing &&
+      mc mb local/${S3_ARCHIVE_BUCKET} --ignore-existing &&
+      mc ilm rule add local/${S3_ARCHIVE_BUCKET} --expire-days ${S3_ARCHIVE_EXPIRY_DAYS:-1} &&
+      echo 'Archive bucket lifecycle: files expire after ${S3_ARCHIVE_EXPIRY_DAYS:-1} days'
+      "
+
 volumes:
   file-data:
   postgres-data:
+  minio-data:

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 type Store struct {
@@ -43,10 +44,26 @@ func (s *Store) Fetch(ctx context.Context, path string) (io.ReadCloser, error) {
 	fullPath := filepath.Join(s.storagePath, path)
 	f, err := os.Open(fullPath)
 	if err != nil {
-		if(os.IsNotExist(err)) {
+		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("file not found")
 		}
 		return nil, err
 	}
 	return f, nil
+}
+
+func (s *Store) PresignFetch(ctx context.Context, path string, expiry time.Duration) (string, error) {
+	// Local dev: return internal file-server route or just error if not supported
+	return "", fmt.Errorf("presigned URLs not supported for local storage")
+}
+
+func (s *Store) PresignStore(ctx context.Context, path string, expiry time.Duration) (string, error) {
+	// Local dev: return internal file-server route or just error if not supported
+	return "", fmt.Errorf("presigned URLs not supported for local storage")
+}
+func (s *Store) PresignArchiveStore(ctx context.Context, path string, contentType string, expiry time.Duration) (string, error) {
+	return "", fmt.Errorf("presigned URLs not supported for local storage")
+}
+func (s *Store) PresignArchiveFetch(ctx context.Context, path string, expiry time.Duration) (string, error) {
+	return "", fmt.Errorf("presigned URLs not supported for local storage")
 }

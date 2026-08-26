@@ -2,9 +2,11 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"time"
 
-	storagev1 "github.com/zarielnd/file-management-service-go/gen/storage/v1"
+	storagev2 "github.com/zarielnd/file-management-service-go/gen/storage/v2"
 	"github.com/zarielnd/file-management-service-go/services/storage/internal/service"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -12,7 +14,7 @@ import (
 )
 
 type GRPCServer struct {
-	storagev1.UnimplementedStorageServiceServer
+	storagev2.UnimplementedStorageServiceServer
 	service *service.FileService
 }
 
@@ -20,13 +22,13 @@ func NewGRPCServer(service *service.FileService) *GRPCServer {
 	return &GRPCServer{service: service}
 }
 
-func (s *GRPCServer) UploadFile(stream storagev1.StorageService_UploadFileServer) error {
+func (s *GRPCServer) UploadFile(stream storagev2.StorageService_UploadFileServer) error {
 	req, err := stream.Recv()
 	if err != nil {
 		return err
 	}
 
-	infoPayload, ok := req.Payload.(*storagev1.UploadFileRequest_Info)
+	infoPayload, ok := req.Payload.(*storagev2.UploadFileRequest_Info)
 	if !ok {
 		return status.Error(codes.InvalidArgument, "first message must be FileInfo")
 	}
@@ -56,8 +58,8 @@ func (s *GRPCServer) UploadFile(stream storagev1.StorageService_UploadFileServer
 		return mapError(err)
 	}
 
-	return stream.SendAndClose(&storagev1.UploadFileResponse{
-		File: &storagev1.FileMetadata{
+	return stream.SendAndClose(&storagev2.UploadFileResponse{
+		File: &storagev2.FileMetadata{
 			Id:          file.ID,
 			Name:        file.Name,
 			Size:        file.SizeBytes,
@@ -68,15 +70,15 @@ func (s *GRPCServer) UploadFile(stream storagev1.StorageService_UploadFileServer
 	})
 }
 
-func (s *GRPCServer) GetFile(req *storagev1.GetFileRequest, stream storagev1.StorageService_GetFileServer) error {
+func (s *GRPCServer) GetFile(req *storagev2.GetFileRequest, stream storagev2.StorageService_GetFileServer) error {
 	rc, file, err := s.service.Fetch(stream.Context(), req.Id)
 	if err != nil {
 		return mapError(err)
 	}
 	defer rc.Close()
 
-	if err := stream.Send(&storagev1.GetFileResponse{
-		Metadata: &storagev1.FileMetadata{
+	if err := stream.Send(&storagev2.GetFileResponse{
+		Metadata: &storagev2.FileMetadata{
 			Id:          file.ID,
 			Name:        file.Name,
 			Size:        file.SizeBytes,
@@ -91,7 +93,7 @@ func (s *GRPCServer) GetFile(req *storagev1.GetFileRequest, stream storagev1.Sto
 	for {
 		n, err := rc.Read(buf)
 		if n > 0 {
-			if err := stream.Send(&storagev1.GetFileResponse{Data: buf[:n]}); err != nil {
+			if err := stream.Send(&storagev2.GetFileResponse{Data: buf[:n]}); err != nil {
 				return err
 			}
 		}
@@ -105,33 +107,33 @@ func (s *GRPCServer) GetFile(req *storagev1.GetFileRequest, stream storagev1.Sto
 	return nil
 }
 
-func (s *GRPCServer) GetMetadata(ctx context.Context, req *storagev1.GetMetadataRequest) (*storagev1.FileMetadata, error) {
+func (s *GRPCServer) GetMetadata(ctx context.Context, req *storagev2.GetMetadataRequest) (*storagev2.FileMetadata, error) {
 	file, err := s.service.Metadata(ctx, req.Id)
 	if err != nil {
 		return nil, mapError(err)
 	}
-	return &storagev1.FileMetadata{
-		Id:        file.ID,
-		Name:      file.Name,
-		Size:      file.SizeBytes,
+	return &storagev2.FileMetadata{
+		Id:          file.ID,
+		Name:        file.Name,
+		Size:        file.SizeBytes,
 		ContentType: file.ContentType,
-		Checksum:  file.Checksum,
-		CreatedAt: timestamppb.New(file.CreatedAt),
+		Checksum:    file.Checksum,
+		CreatedAt:   timestamppb.New(file.CreatedAt),
 	}, nil
 }
 
-func (s *GRPCServer) ListFiles(ctx context.Context, req *storagev1.ListFilesRequest) (*storagev1.ListFilesResponse, error) {
+func (s *GRPCServer) ListFiles(ctx context.Context, req *storagev2.ListFilesRequest) (*storagev2.ListFilesResponse, error) {
 	files, total, err := s.service.List(ctx, int(req.Page), int(req.PageSize))
 	if err != nil {
 		return nil, mapError(err)
 	}
 
-	resp := &storagev1.ListFilesResponse{
-		Files: make([]*storagev1.FileMetadata, 0, len(files)),
+	resp := &storagev2.ListFilesResponse{
+		Files: make([]*storagev2.FileMetadata, 0, len(files)),
 		Total: int32(total),
 	}
 	for _, f := range files {
-		resp.Files = append(resp.Files, &storagev1.FileMetadata{
+		resp.Files = append(resp.Files, &storagev2.FileMetadata{
 			Id:          f.ID,
 			Name:        f.Name,
 			Size:        f.SizeBytes,
@@ -143,7 +145,7 @@ func (s *GRPCServer) ListFiles(ctx context.Context, req *storagev1.ListFilesRequ
 	return resp, nil
 }
 
-func (s *GRPCServer) DownloadArchive(req *storagev1.DownloadArchiveRequest, stream storagev1.StorageService_DownloadArchiveServer) error {
+func (s *GRPCServer) DownloadArchive(req *storagev2.DownloadArchiveRequest, stream storagev2.StorageService_DownloadArchiveServer) error {
 	rc, err := s.service.DownloadArchive(stream.Context(), req.FileIds)
 	if err != nil {
 		return mapError(err)
@@ -154,7 +156,7 @@ func (s *GRPCServer) DownloadArchive(req *storagev1.DownloadArchiveRequest, stre
 	for {
 		n, err := rc.Read(buf)
 		if n > 0 {
-			if err := stream.Send(&storagev1.DownloadArchiveResponse{Data: buf[:n]}); err != nil {
+			if err := stream.Send(&storagev2.DownloadArchiveResponse{Data: buf[:n]}); err != nil {
 				return err
 			}
 		}
@@ -168,6 +170,79 @@ func (s *GRPCServer) DownloadArchive(req *storagev1.DownloadArchiveRequest, stre
 	return nil
 }
 
+func (s *GRPCServer) GetDownloadURLs(ctx context.Context, req *storagev2.GetDownloadURLsRequest) (*storagev2.GetDownloadURLsResponse, error) {
+	files, err := s.service.GetByIDs(ctx, req.FileIds)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	if len(files) != len(req.FileIds) {
+		return nil, status.Error(codes.NotFound, "one or more files not found")
+	}
+
+	resp := &storagev2.GetDownloadURLsResponse{}
+	for _, f := range files {
+		url, err := s.service.PresignFetch(ctx, f.ID, 15*time.Minute)
+		if err != nil {
+			return nil, status.Error(codes.Internal, fmt.Sprintf("presign %s: %v", f.ID, err))
+		}
+		resp.Files = append(resp.Files, &storagev2.FileDownloadURL{
+			FileId:    f.ID,
+			Name:      f.Name,
+			Url:       url,
+			SizeBytes: f.SizeBytes,
+		})
+	}
+	return resp, nil
+}
+
+func (s *GRPCServer) GetUploadURL(ctx context.Context, req *storagev2.GetUploadURLRequest) (*storagev2.GetUploadURLResponse, error) {
+	file, url, err := s.service.ReserveUpload(ctx, req.Filename, req.ContentType)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return &storagev2.GetUploadURLResponse{
+		UploadUrl: url,
+		FileId:    file.ID,
+	}, nil
+}
+
+func (s *GRPCServer) ConfirmUpload(ctx context.Context, req *storagev2.ConfirmUploadRequest) (*storagev2.FileMetadata, error) {
+	file, err := s.service.ConfirmUpload(ctx, req.FileId, req.SizeBytes, req.Checksum)
+	if err != nil {
+		return nil, mapError(err)
+	}
+
+	return &storagev2.FileMetadata{
+		Id:          file.ID,
+		Name:        file.Name,
+		Size:        file.SizeBytes,
+		ContentType: file.ContentType,
+		Checksum:    file.Checksum,
+		CreatedAt:   timestamppb.New(file.CreatedAt),
+	}, nil
+}
+
+func (s *GRPCServer) GetArchiveUploadURL(ctx context.Context, req *storagev2.GetArchiveUploadURLRequest) (*storagev2.GetArchiveUploadURLResponse, error) {
+	url, err := s.service.PresignArchiveStore(ctx, req.Path, req.ContentType)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return &storagev2.GetArchiveUploadURLResponse{
+		UploadUrl: url,
+		Path:      req.Path,
+	}, nil
+}
+
+func (s *GRPCServer) GetArchiveDownloadURL(ctx context.Context, req *storagev2.GetArchiveDownloadURLRequest) (*storagev2.GetArchiveDownloadURLResponse, error) {
+	url, err := s.service.PresignArchiveFetch(ctx, req.Path)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return &storagev2.GetArchiveDownloadURLResponse{
+		DownloadUrl: url,
+	}, nil
+}
 func mapError(err error) error {
 	// TODO: inspect error types and map properly
 	return status.Error(codes.Internal, err.Error())

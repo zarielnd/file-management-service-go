@@ -62,9 +62,9 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*repository.File, 
 	return &f, nil
 }
 
-func (r *Repository) GetByIDs(ctx context.Context, ids []string) ([]repository.File, error) {
+func (r *Repository) GetByIDs(ctx context.Context, ids []string) ([]*repository.File, error) {
 	if len(ids) == 0 {
-		return []repository.File{}, nil
+		return []*repository.File{}, nil
 	}
 
 	placeholders := make([]string, len(ids))
@@ -75,7 +75,7 @@ func (r *Repository) GetByIDs(ctx context.Context, ids []string) ([]repository.F
 		args[i] = id
 	}
 
-	query := fmt.Sprintf(`SELECT id, name, storage_path, content_type, size_bytes, checksum, created_at FROM files WHERE id IN (%s)`, 
+	query := fmt.Sprintf(`SELECT id, name, storage_path, content_type, size_bytes, checksum, created_at FROM files WHERE id IN (%s)`,
 		strings.Join(placeholders, ","))
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -83,13 +83,13 @@ func (r *Repository) GetByIDs(ctx context.Context, ids []string) ([]repository.F
 	}
 	defer rows.Close()
 
-	var files []repository.File
+	var files []*repository.File
 	for rows.Next() {
 		var f repository.File
 		if err := rows.Scan(&f.ID, &f.Name, &f.StoragePath, &f.ContentType, &f.SizeBytes, &f.Checksum, &f.CreatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan file: %w", err)
 		}
-		files = append(files, f)
+		files = append(files, &f)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -104,13 +104,13 @@ func (r *Repository) List(ctx context.Context, limit, offset int) ([]*repository
 	var totalCount int
 	err := r.db.QueryRowContext(ctx, countQuery).Scan(&totalCount)
 	if err != nil {
-		return nil,0, fmt.Errorf("failed to count files: %w", err)
+		return nil, 0, fmt.Errorf("failed to count files: %w", err)
 	}
 
 	query := `SELECT id, name, storage_path, content_type, size_bytes, checksum, created_at FROM files ORDER BY created_at DESC LIMIT $1 OFFSET $2`
 	rows, err := r.db.QueryContext(ctx, query, limit, offset)
 	if err != nil {
-		return nil,0, fmt.Errorf("failed to list files: %w", err)
+		return nil, 0, fmt.Errorf("failed to list files: %w", err)
 	}
 	defer rows.Close()
 
@@ -118,14 +118,50 @@ func (r *Repository) List(ctx context.Context, limit, offset int) ([]*repository
 	for rows.Next() {
 		var f repository.File
 		if err := rows.Scan(&f.ID, &f.Name, &f.StoragePath, &f.ContentType, &f.SizeBytes, &f.Checksum, &f.CreatedAt); err != nil {
-			return nil,0, fmt.Errorf("failed to scan file: %w", err)
+			return nil, 0, fmt.Errorf("failed to scan file: %w", err)
 		}
 		files = append(files, &f)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil,0, fmt.Errorf("error iterating over rows: %w", err)
+		return nil, 0, fmt.Errorf("error iterating over rows: %w", err)
 	}
 
-	return files,totalCount, nil
+	return files, totalCount, nil
+}
+
+func (r *Repository) Update(ctx context.Context, file *repository.File) error {
+	query := `UPDATE files
+		SET name = $2, storage_path = $3, content_type = $4,
+		    size_bytes = $5, checksum = $6, created_at = $7
+		WHERE id = $1`
+
+	res, err := r.db.ExecContext(ctx, query,
+		file.ID, file.Name, file.StoragePath, file.ContentType,
+		file.SizeBytes, file.Checksum, file.CreatedAt)
+	if err != nil {
+		return fmt.Errorf("failed to update file: %w", err)
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check update result: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("file not found")
+	}
+	return nil
+}
+
+func (r *Repository) ConfirmUpload(ctx context.Context, id string, size int64, checksum string) error {
+	query := `UPDATE files SET size_bytes = $2, checksum = $3 WHERE id = $1`
+	res, err := r.db.ExecContext(ctx, query, id, size, checksum)
+	if err != nil {
+		return fmt.Errorf("failed to confirm upload: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("file not found")
+	}
+	return nil
 }

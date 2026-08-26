@@ -64,3 +64,21 @@ func (s *StorageClient) List(ctx context.Context, page, pageSize int) ([]domain.
 func (s *StorageClient) DownloadArchive(ctx context.Context, ids []string) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader("stub zip content")), nil
 }
+
+func (c *StorageClient) GetDownloadURLs(ctx context.Context, ids []string) ([]client.DownloadURL, error) {
+	return []client.DownloadURL{}, nil
+}
+func (c *StorageClient) GetUploadURL(ctx context.Context, filename, contentType string) (client.UploadURL, error) {
+	return client.UploadURL{}, nil
+}
+func (c *StorageClient) ConfirmUpload(ctx context.Context, fileID string, size int64, checksum string) (domain.File, error) {
+	return domain.File{}, nil
+}
+
+func (c *StorageClient) GetArchiveUploadURL(ctx context.Context, path, contentType string) (string, error) {
+	return "", nil
+}
+
+func (c *StorageClient) GetArchiveDownloadURL(ctx context.Context, path string) (string, error) {
+	return "", nil
+}

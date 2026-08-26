@@ -2,17 +2,20 @@ package grpc
 
 import (
 	"context"
+	"fmt"
 	"io"
 
-	storagev1 "github.com/zarielnd/file-management-service-go/gen/storage/v1"
+	storagev2 "github.com/zarielnd/file-management-service-go/gen/storage/v2"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/client"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/domain"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 type storageClient struct {
-	client storagev1.StorageServiceClient
+	client storagev2.StorageServiceClient
 }
 
 func NewStorageClient(target string) (client.StorageClient, func() error, error) {
@@ -21,7 +24,7 @@ func NewStorageClient(target string) (client.StorageClient, func() error, error)
 		return nil, nil, err
 	}
 	c := &storageClient{
-		client: storagev1.NewStorageServiceClient(conn),
+		client: storagev2.NewStorageServiceClient(conn),
 	}
 	return c, conn.Close, nil
 }
@@ -33,9 +36,9 @@ func (c *storageClient) Store(ctx context.Context, input client.UploadInput) (do
 	}
 
 	// Send metadata first
-	if err := stream.Send(&storagev1.UploadFileRequest{
-		Payload: &storagev1.UploadFileRequest_Info{
-			Info: &storagev1.FileInfo{
+	if err := stream.Send(&storagev2.UploadFileRequest{
+		Payload: &storagev2.UploadFileRequest_Info{
+			Info: &storagev2.FileInfo{
 				Filename:    input.Name,
 				ContentType: input.ContentType,
 				Size:        input.Size,
@@ -50,8 +53,8 @@ func (c *storageClient) Store(ctx context.Context, input client.UploadInput) (do
 	for {
 		n, err := input.Content.Read(buf)
 		if n > 0 {
-			if err := stream.Send(&storagev1.UploadFileRequest{
-				Payload: &storagev1.UploadFileRequest_ChunkData{ChunkData: buf[:n]},
+			if err := stream.Send(&storagev2.UploadFileRequest{
+				Payload: &storagev2.UploadFileRequest_ChunkData{ChunkData: buf[:n]},
 			}); err != nil {
 				return domain.File{}, err
 			}
@@ -73,7 +76,7 @@ func (c *storageClient) Store(ctx context.Context, input client.UploadInput) (do
 }
 
 func (c *storageClient) Fetch(ctx context.Context, id string) (io.ReadCloser, domain.File, error) {
-	stream, err := c.client.GetFile(ctx, &storagev1.GetFileRequest{Id: id})
+	stream, err := c.client.GetFile(ctx, &storagev2.GetFileRequest{Id: id})
 	if err != nil {
 		return nil, domain.File{}, err
 	}
@@ -115,7 +118,7 @@ func (c *storageClient) Fetch(ctx context.Context, id string) (io.ReadCloser, do
 }
 
 func (c *storageClient) Metadata(ctx context.Context, id string) (domain.File, error) {
-	resp, err := c.client.GetMetadata(ctx, &storagev1.GetMetadataRequest{Id: id})
+	resp, err := c.client.GetMetadata(ctx, &storagev2.GetMetadataRequest{Id: id})
 	if err != nil {
 		return domain.File{}, err
 	}
@@ -123,7 +126,7 @@ func (c *storageClient) Metadata(ctx context.Context, id string) (domain.File, e
 }
 
 func (c *storageClient) List(ctx context.Context, page, pageSize int) ([]domain.File, int, error) {
-	resp, err := c.client.ListFiles(ctx, &storagev1.ListFilesRequest{
+	resp, err := c.client.ListFiles(ctx, &storagev2.ListFilesRequest{
 		Page:     int32(page),
 		PageSize: int32(pageSize),
 	})
@@ -139,7 +142,7 @@ func (c *storageClient) List(ctx context.Context, page, pageSize int) ([]domain.
 }
 
 func (c *storageClient) DownloadArchive(ctx context.Context, ids []string) (io.ReadCloser, error) {
-	stream, err := c.client.DownloadArchive(ctx, &storagev1.DownloadArchiveRequest{FileIds: ids})
+	stream, err := c.client.DownloadArchive(ctx, &storagev2.DownloadArchiveRequest{FileIds: ids})
 	if err != nil {
 		return nil, err
 	}
@@ -165,13 +168,96 @@ func (c *storageClient) DownloadArchive(ctx context.Context, ids []string) (io.R
 	return pr, nil
 }
 
-func protoToDomain(f *storagev1.FileMetadata) domain.File {
+func (c *storageClient) GetDownloadURLs(ctx context.Context, ids []string) ([]client.DownloadURL, error) {
+	resp, err := c.client.GetDownloadURLs(ctx, &storagev2.GetDownloadURLsRequest{
+		FileIds: ids,
+	})
+	if err != nil {
+		return nil, mapGRPCError(err)
+	}
+
+	var out []client.DownloadURL
+	for _, f := range resp.Files {
+		out = append(out, client.DownloadURL{
+			FileID:    f.FileId,
+			Name:      f.Name,
+			URL:       f.Url,
+			SizeBytes: f.SizeBytes,
+		})
+	}
+	return out, nil
+}
+
+func (c *storageClient) GetUploadURL(ctx context.Context, filename, contentType string) (client.UploadURL, error) {
+	resp, err := c.client.GetUploadURL(ctx, &storagev2.GetUploadURLRequest{
+		Filename:    filename,
+		ContentType: contentType,
+	})
+	if err != nil {
+		return client.UploadURL{}, mapGRPCError(err)
+	}
+	return client.UploadURL{
+		UploadURL: resp.UploadUrl,
+		FileID:    resp.FileId,
+	}, nil
+}
+
+func (c *storageClient) ConfirmUpload(ctx context.Context, fileID string, size int64, checksum string) (domain.File, error) {
+	resp, err := c.client.ConfirmUpload(ctx, &storagev2.ConfirmUploadRequest{
+		FileId:    fileID,
+		SizeBytes: size,
+		Checksum:  checksum,
+	})
+	if err != nil {
+		return domain.File{}, mapGRPCError(err)
+	}
+	return protoToDomain(resp), nil
+}
+
+func (c *storageClient) GetArchiveUploadURL(ctx context.Context, path, contentType string) (string, error) {
+	resp, err := c.client.GetArchiveUploadURL(ctx, &storagev2.GetArchiveUploadURLRequest{
+		Path:        path,
+		ContentType: contentType,
+	})
+	if err != nil {
+		return "", mapGRPCError(err)
+	}
+	return resp.UploadUrl, nil
+}
+
+func (c *storageClient) GetArchiveDownloadURL(ctx context.Context, path string) (string, error) {
+	resp, err := c.client.GetArchiveDownloadURL(ctx, &storagev2.GetArchiveDownloadURLRequest{
+		Path: path,
+	})
+	if err != nil {
+		return "", mapGRPCError(err)
+	}
+	return resp.DownloadUrl, nil
+}
+
+func mapGRPCError(err error) error {
+	st, ok := status.FromError(err)
+	if !ok {
+		return err
+	}
+	switch st.Code() {
+	case codes.NotFound:
+		return fmt.Errorf("not found: %s", st.Message())
+	case codes.InvalidArgument:
+		return fmt.Errorf("invalid argument: %s", st.Message())
+	default:
+		return fmt.Errorf("storage error: %s", st.Message())
+	}
+}
+
+func protoToDomain(f *storagev2.FileMetadata) domain.File {
 	t := f.CreatedAt.AsTime()
 	return domain.File{
 		ID:          f.Id,
 		Name:        f.Name,
 		Size:        f.Size,
 		ContentType: f.ContentType,
+		Checksum:    f.Checksum,
 		CreatedAt:   t,
 	}
 }

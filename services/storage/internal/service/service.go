@@ -16,8 +16,8 @@ import (
 	"github.com/zarielnd/file-management-service-go/services/storage/internal/storage"
 )
 
-type FileService struct{
-	repo repository.Repository
+type FileService struct {
+	repo    repository.Repository
 	storage storage.Provider
 	baseDir string
 	tempDir string
@@ -26,7 +26,7 @@ type FileService struct{
 func NewFileService(repo repository.Repository, storage storage.Provider, baseDir, tempDir string) *FileService {
 	os.MkdirAll(tempDir, 0755)
 	return &FileService{
-		repo: repo,
+		repo:    repo,
 		storage: storage,
 		baseDir: baseDir,
 		tempDir: tempDir,
@@ -37,7 +37,7 @@ func (s *FileService) Store(ctx context.Context, name, contentType string, reade
 	id := uuid.Must(uuid.NewV7()).String()
 	storagePath := s.makePath(id, name)
 
-	hash:= sha256.New()
+	hash := sha256.New()
 	tee := io.TeeReader(reader, hash)
 	size, err := s.storage.Store(ctx, storagePath, tee)
 	if err != nil {
@@ -90,7 +90,7 @@ func (s *FileService) List(ctx context.Context, page, pageSize int) ([]*reposito
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list files: %w", err)
 	}
-	return files,count , nil
+	return files, count, nil
 }
 
 func (s *FileService) DownloadArchive(ctx context.Context, ids []string) (io.ReadCloser, error) {
@@ -99,7 +99,7 @@ func (s *FileService) DownloadArchive(ctx context.Context, ids []string) (io.Rea
 		return nil, fmt.Errorf("failed to fetch file metadata: %w", err)
 	}
 
-	if len(files) != len(ids){
+	if len(files) != len(ids) {
 		return nil, fmt.Errorf("one or more files not found")
 	}
 
@@ -111,7 +111,7 @@ func (s *FileService) DownloadArchive(ctx context.Context, ids []string) (io.Rea
 
 	zw := zip.NewWriter(tmpFile)
 	for _, file := range files {
-		rc,err := s.storage.Fetch(ctx, file.StoragePath)
+		rc, err := s.storage.Fetch(ctx, file.StoragePath)
 		if err != nil {
 			zw.Close()
 			tmpFile.Close()
@@ -152,7 +152,69 @@ func (s *FileService) DownloadArchive(ctx context.Context, ids []string) (io.Rea
 	return &deleteOnClose{File: f, path: tmpPath}, nil
 }
 
-//helper
+func (s *FileService) GetByIDs(ctx context.Context, ids []string) ([]*repository.File, error) {
+	files, err := s.repo.GetByIDs(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch files: %w", err)
+	}
+	return files, nil
+}
+
+func (s *FileService) PresignFetch(ctx context.Context, id string, expiry time.Duration) (string, error) {
+	file, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch file metadata: %w", err)
+	}
+	return s.storage.PresignFetch(ctx, file.StoragePath, expiry)
+}
+
+func (s *FileService) PresignStore(ctx context.Context, id string, expiry time.Duration) (string, error) {
+	file, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch file metadata: %w", err)
+	}
+	return s.storage.PresignStore(ctx, file.StoragePath, expiry)
+}
+
+func (s *FileService) ReserveUpload(ctx context.Context, name, contentType string) (*repository.File, string, error) {
+	id := uuid.Must(uuid.NewV7()).String()
+	storagePath := s.makePath(id, name)
+
+	file := repository.File{
+		ID:          id,
+		Name:        name,
+		StoragePath: storagePath,
+		ContentType: contentType,
+		CreatedAt:   time.Now().UTC(),
+	}
+	if err := s.repo.Create(ctx, &file); err != nil {
+		return &repository.File{}, "", fmt.Errorf("reserve: %w", err)
+	}
+
+	url, err := s.storage.PresignStore(ctx, storagePath, 15*time.Minute)
+	if err != nil {
+		return &repository.File{}, "", fmt.Errorf("presign: %w", err)
+	}
+
+	return &file, url, nil
+}
+
+func (s *FileService) ConfirmUpload(ctx context.Context, id string, size int64, checksum string) (*repository.File, error) {
+	if err := s.repo.ConfirmUpload(ctx, id, size, checksum); err != nil {
+		return &repository.File{}, err
+	}
+	return s.repo.GetByID(ctx, id) // fetch updated row
+}
+
+func (s *FileService) PresignArchiveStore(ctx context.Context, path string, contentType string) (string, error) {
+	return s.storage.PresignArchiveStore(ctx, path, contentType, 15*time.Minute)
+}
+
+func (s *FileService) PresignArchiveFetch(ctx context.Context, path string) (string, error) {
+	return s.storage.PresignArchiveFetch(ctx, path, 15*time.Minute)
+}
+
+// helper
 type deleteOnClose struct {
 	*os.File
 	path string
