@@ -1,4 +1,3 @@
-//go:generate mockgen -source=client.go -destination=../mocks/client_mock.go -package=mocks
 package client
 
 import (
@@ -14,6 +13,7 @@ type UploadInput struct {
 	Size        int64
 	Content     io.Reader
 }
+
 type DownloadURL struct {
 	FileID    string
 	Name      string

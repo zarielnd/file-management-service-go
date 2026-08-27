@@ -1,0 +1,4 @@
+DROP INDEX IF EXISTS idx_users_email;
+DROP INDEX IF EXISTS idx_files_owner_id;
+DROP TABLE IF EXISTS users;
+ALTER TABLE files DROP COLUMN IF EXISTS owner_id;

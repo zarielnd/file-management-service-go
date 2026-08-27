@@ -1,4 +1,3 @@
-//go:generate mockgen -source=file.go -destination=../../mocks/file_service_mock.go -package=mocks
 package file
 
 import (
@@ -20,7 +19,6 @@ type FileService interface {
 	Upload(ctx context.Context, input client.UploadInput) (domain.File, error)
 	Download(ctx context.Context, id string) (io.ReadCloser, domain.File, error)
 	List(ctx context.Context, page, pageSize int) ([]domain.File, int, error)
-	DownloadMultiple(ctx context.Context, ids []string) (io.ReadCloser, error)
 	Metadata(ctx context.Context, id string) (domain.File, error)
 	StartArchiveWorkflow(ctx context.Context, ids []string) (archiveID string, wsEndpoint string, err error)
 }
@@ -99,14 +97,10 @@ func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", `attachment; filename="`+file.Name+`"`)
 	w.Header().Set("Content-Length", strconv.FormatInt(file.Size, 10))
 
-	// Copy and handle error
 	if _, err := io.Copy(w, reader); err != nil {
-		// Response already partially written; can't change status code
-		// But at least log it
 		log.Printf("download copy error: %v", err)
 		return
 	}
-	// NO w.WriteHeader here — io.Copy already flushed 200 OK
 }
 
 func (h *FileHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -134,7 +128,6 @@ func (h *FileHandler) List(w http.ResponseWriter, r *http.Request) {
 			"total":    total,
 		},
 	})
-
 }
 
 func (h *FileHandler) DownloadMultiple(w http.ResponseWriter, r *http.Request) {
@@ -148,14 +141,9 @@ func (h *FileHandler) DownloadMultiple(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.cfg.UseTemporalArchive {
-		h.downloadMultipleSync(w, r, req.IDs)
-		return
-	}
-
 	archiveID, wsEndpoint, err := h.service.StartArchiveWorkflow(r.Context(), req.IDs)
 	if err != nil {
-		httpx.WriteError(w, apperror.Internal("failed to start archive"))
+		httpx.WriteError(w, err)
 		return
 	}
 
@@ -165,19 +153,6 @@ func (h *FileHandler) DownloadMultiple(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Sync fallback (deprecated, kept for feature flag = false)
-func (h *FileHandler) downloadMultipleSync(w http.ResponseWriter, r *http.Request, ids []string) {
-	reader, err := h.service.DownloadMultiple(r.Context(), ids)
-	if err != nil {
-		httpx.WriteError(w, err)
-		return
-	}
-	defer reader.Close()
-
-	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", `attachment; filename="files.zip"`)
-	io.Copy(w, reader)
-}
 func (h *FileHandler) Metadata(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {

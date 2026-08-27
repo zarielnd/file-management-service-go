@@ -27,7 +27,7 @@ func main() {
 
 	w := worker.New(c, cfg.TemporalQueue, worker.Options{EnableSessionWorker: true})
 
-	storageClient, closeConn, err := grpc.NewStorageClient(cfg.StorageGRPCTarget)
+	storageClient, closeConn, err := grpc.NewStorageClient(cfg.StorageGRPCTarget, cfg.ServiceKey)
 	if err != nil {
 		log.Fatalf("failed to connect to storage service: %v", err)
 	}

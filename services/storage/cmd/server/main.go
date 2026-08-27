@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net"
+	"os"
 
 	storagev2 "github.com/zarielnd/file-management-service-go/gen/storage/v2"
 	"github.com/zarielnd/file-management-service-go/services/storage/internal/config"
@@ -37,7 +38,12 @@ func main() {
 
 	fileSvc := service.NewFileService(repo, provider, cfg.StoragePath, cfg.TempPath)
 
-	grpcServer := server.NewGRPCServer(fileSvc)
+	serviceKey := os.Getenv("SERVICE_KEY")
+	if serviceKey == "" {
+		log.Println("WARNING: SERVICE_KEY not set, gRPC auth disabled")
+	}
+
+	grpcServer := server.NewGRPCServer(fileSvc, serviceKey)
 
 	lis, err := net.Listen("tcp", ":"+cfg.GRPCPort)
 	if err != nil {

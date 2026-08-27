@@ -36,6 +36,7 @@ message FileInfo {
   string filename = 1;
   string content_type = 2;
   int64 size = 3;
+  string owner_id = 4;
 }
 
 message UploadFileResponse {
@@ -62,6 +63,7 @@ message FileMetadata {
   string content_type = 4;
   string checksum = 5;
   google.protobuf.Timestamp created_at = 6;
+  string owner_id = 7;
 }
 
 message ListFilesRequest {

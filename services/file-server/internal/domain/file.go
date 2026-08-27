@@ -9,4 +9,5 @@ type File struct {
 	ContentType string
 	Checksum    string
 	CreatedAt   time.Time
+	OwnerID     string
 }

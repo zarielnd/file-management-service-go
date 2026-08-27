@@ -1,68 +1,88 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"log"
 	"net/http"
 	"strings"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/redis/go-redis/v9"
+
+	"github.com/zarielnd/file-management-service-go/services/file-server/internal/auth"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/client/grpc"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/config"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/handler/file"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/handler/health"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/service"
-	"go.temporal.io/sdk/client"
+	temporalClient "go.temporal.io/sdk/client"
 )
 
 func main() {
-
-	config, err := config.Load()
+	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
-	storageClient, closeConn, err := grpc.NewStorageClient(config.StorageGRPCTarget)
+	db, err := sql.Open("pgx", cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("failed to open db: %v", err)
+	}
+	defer db.Close()
+
+	redisClient := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
+	if err := redisClient.Ping(context.Background()).Err(); err != nil {
+		log.Fatalf("failed to connect to redis: %v", err)
+	}
+
+	authRepo := auth.NewPostgresRepository(db)
+	authSvc := auth.NewService(authRepo, redisClient, cfg.JWTSecret, cfg.AccessTokenTTL, cfg.RefreshTokenTTL)
+	authHandler := auth.NewHandler(authSvc)
+
+	storageClient, closeConn, err := grpc.NewStorageClient(cfg.StorageGRPCTarget, cfg.ServiceKey)
 	if err != nil {
 		log.Fatalf("failed to connect to storage service: %v", err)
 	}
 	defer closeConn()
 
-	// Create Temporal client
-	temporalClient, err := client.Dial(client.Options{
-		HostPort: config.TemporalHost,
-	})
+	tc, err := temporalClient.Dial(temporalClient.Options{HostPort: cfg.TemporalHost})
 	if err != nil {
 		log.Fatalf("failed to connect to temporal: %v", err)
 	}
-	defer temporalClient.Close()
+	defer tc.Close()
 
-	fileSvc := service.NewFileService(storageClient, temporalClient, config.TemporalQueue, config.MaxUploadSize)
-	fileHandler := file.NewFileHandler(fileSvc, config, config.MaxMultipartMemory)
+	fileSvc := service.NewFileService(storageClient, tc, cfg.TemporalQueue, cfg.MaxUploadSize)
+	fileHandler := file.NewFileHandler(fileSvc, cfg, cfg.MaxMultipartMemory)
 	healthHandler := health.NewHealthHandler()
+	archiveWS := file.NewArchiveWSHandler(tc)
 
 	mux := http.NewServeMux()
 
-	// Health
 	mux.HandleFunc("GET /health", healthHandler.Health)
 
-	archiveWS := file.NewArchiveWSHandler(temporalClient)
+	mux.HandleFunc("POST /auth/signup", authHandler.SignUp)
+	mux.HandleFunc("POST /auth/signin", authHandler.SignIn)
+	mux.HandleFunc("POST /auth/refresh", authHandler.Refresh)
 
-	// Files
-	mux.HandleFunc("POST /files", fileHandler.Upload)
-	mux.HandleFunc("GET /files", fileHandler.List)
-	mux.HandleFunc("GET /files/{id}/download", fileHandler.Download)
-	mux.HandleFunc("POST /files/download-many", fileHandler.DownloadMultiple)
-	mux.HandleFunc("GET /files/{id}/metadata", fileHandler.Metadata)
+	requireAuth := authSvc.RequireAuth
 
-	//web socket
-	mux.HandleFunc("GET /api/archives/{id}/ws", archiveWS.ServeHTTP)
+	mux.HandleFunc("POST /auth/logout", requireAuth(http.HandlerFunc(authHandler.Logout)).ServeHTTP)
+	mux.HandleFunc("POST /auth/logout-all", requireAuth(http.HandlerFunc(authHandler.LogoutAll)).ServeHTTP)
+
+	mux.HandleFunc("POST /files", requireAuth(http.HandlerFunc(fileHandler.Upload)).ServeHTTP)
+	mux.HandleFunc("GET /files", requireAuth(http.HandlerFunc(fileHandler.List)).ServeHTTP)
+	mux.HandleFunc("GET /files/{id}/download", requireAuth(http.HandlerFunc(fileHandler.Download)).ServeHTTP)
+	mux.HandleFunc("POST /files/download-many", requireAuth(http.HandlerFunc(fileHandler.DownloadMultiple)).ServeHTTP)
+	mux.HandleFunc("GET /files/{id}/metadata", requireAuth(http.HandlerFunc(fileHandler.Metadata)).ServeHTTP)
+	mux.HandleFunc("GET /api/archives/{id}/ws", requireAuth(http.HandlerFunc(archiveWS.ServeHTTP)).ServeHTTP)
 
 	server := &http.Server{
-		Addr:    ":" + config.ServerPort,
+		Addr:    ":" + cfg.ServerPort,
 		Handler: stripTrailingSlash(mux),
 	}
 
-	log.Println("file-server running on " + config.ServerPort)
-
+	log.Println("file-server running on " + cfg.ServerPort)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("failed to start server: %v", err)
 	}

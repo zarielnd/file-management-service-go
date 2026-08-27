@@ -48,11 +48,12 @@ func (r *Repository) Create(ctx context.Context, file *repository.File) error {
 	return nil
 }
 
-func (r *Repository) GetByID(ctx context.Context, id string) (*repository.File, error) {
-	query := `SELECT id, name, storage_path, content_type, size_bytes, checksum, created_at FROM files WHERE id = $1`
-	row := r.db.QueryRowContext(ctx, query, id)
+func (r *Repository) GetByID(ctx context.Context, id string, userID string) (*repository.File, error) {
+	query := `SELECT id, name, storage_path, content_type, size_bytes, checksum, created_at, owner_id
+	          FROM files WHERE id = $1 AND owner_id = $2`
+	row := r.db.QueryRowContext(ctx, query, id, userID)
 	var f repository.File
-	err := row.Scan(&f.ID, &f.Name, &f.StoragePath, &f.ContentType, &f.SizeBytes, &f.Checksum, &f.CreatedAt)
+	err := row.Scan(&f.ID, &f.Name, &f.StoragePath, &f.ContentType, &f.SizeBytes, &f.Checksum, &f.CreatedAt, &f.OwnerID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("file not found")
@@ -62,21 +63,22 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*repository.File, 
 	return &f, nil
 }
 
-func (r *Repository) GetByIDs(ctx context.Context, ids []string) ([]*repository.File, error) {
+func (r *Repository) GetByIDs(ctx context.Context, ids []string, userID string) ([]*repository.File, error) {
 	if len(ids) == 0 {
 		return []*repository.File{}, nil
 	}
 
 	placeholders := make([]string, len(ids))
-	args := make([]any, len(ids))
+	args := make([]any, len(ids)+1)
 
 	for i, id := range ids {
 		placeholders[i] = fmt.Sprintf("$%d", i+1)
 		args[i] = id
 	}
+	args[len(ids)] = userID
 
-	query := fmt.Sprintf(`SELECT id, name, storage_path, content_type, size_bytes, checksum, created_at FROM files WHERE id IN (%s)`,
-		strings.Join(placeholders, ","))
+	query := fmt.Sprintf(`SELECT id, name, storage_path, content_type, size_bytes, checksum, created_at, owner_id FROM files WHERE id IN (%s) AND owner_id = $%d`,
+		strings.Join(placeholders, ","), len(ids)+1)
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get files by IDs: %w", err)
@@ -86,7 +88,7 @@ func (r *Repository) GetByIDs(ctx context.Context, ids []string) ([]*repository.
 	var files []*repository.File
 	for rows.Next() {
 		var f repository.File
-		if err := rows.Scan(&f.ID, &f.Name, &f.StoragePath, &f.ContentType, &f.SizeBytes, &f.Checksum, &f.CreatedAt); err != nil {
+		if err := rows.Scan(&f.ID, &f.Name, &f.StoragePath, &f.ContentType, &f.SizeBytes, &f.Checksum, &f.CreatedAt, &f.OwnerID); err != nil {
 			return nil, fmt.Errorf("failed to scan file: %w", err)
 		}
 		files = append(files, &f)
@@ -99,16 +101,16 @@ func (r *Repository) GetByIDs(ctx context.Context, ids []string) ([]*repository.
 	return files, nil
 }
 
-func (r *Repository) List(ctx context.Context, limit, offset int) ([]*repository.File, int, error) {
-	countQuery := `SELECT COUNT(*) FROM files`
+func (r *Repository) List(ctx context.Context, userID string, limit, offset int) ([]*repository.File, int, error) {
+	countQuery := `SELECT COUNT(*) FROM files WHERE owner_id = $1`
 	var totalCount int
-	err := r.db.QueryRowContext(ctx, countQuery).Scan(&totalCount)
+	err := r.db.QueryRowContext(ctx, countQuery, userID).Scan(&totalCount)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count files: %w", err)
 	}
 
-	query := `SELECT id, name, storage_path, content_type, size_bytes, checksum, created_at FROM files ORDER BY created_at DESC LIMIT $1 OFFSET $2`
-	rows, err := r.db.QueryContext(ctx, query, limit, offset)
+	query := `SELECT id, name, storage_path, content_type, size_bytes, checksum, created_at, owner_id FROM files WHERE owner_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`
+	rows, err := r.db.QueryContext(ctx, query, userID, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list files: %w", err)
 	}
@@ -117,7 +119,7 @@ func (r *Repository) List(ctx context.Context, limit, offset int) ([]*repository
 	var files []*repository.File
 	for rows.Next() {
 		var f repository.File
-		if err := rows.Scan(&f.ID, &f.Name, &f.StoragePath, &f.ContentType, &f.SizeBytes, &f.Checksum, &f.CreatedAt); err != nil {
+		if err := rows.Scan(&f.ID, &f.Name, &f.StoragePath, &f.ContentType, &f.SizeBytes, &f.Checksum, &f.CreatedAt, &f.OwnerID); err != nil {
 			return nil, 0, fmt.Errorf("failed to scan file: %w", err)
 		}
 		files = append(files, &f)

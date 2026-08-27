@@ -14,7 +14,7 @@ import (
 )
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true }, // tighten in prod
+	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
 type ArchiveWSHandler struct {
@@ -39,11 +39,9 @@ func (h *ArchiveWSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Context cancels if client disconnects
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	// Goroutine: detect client disconnect by reading from WS
 	go func() {
 		defer conn.Close()
 		for {
@@ -55,17 +53,14 @@ func (h *ArchiveWSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// Block until workflow completes (or client disconnects)
 	run := h.temporalClient.GetWorkflow(ctx, workflowID, "")
 	var result workflows.ArchiveResult
 	err = run.Get(ctx, &result)
 
-	// Client disconnected
 	if ctx.Err() != nil {
 		return
 	}
 
-	// Workflow failed
 	if err != nil {
 		writeJSON(conn, map[string]string{
 			"event":   "error",
@@ -74,7 +69,6 @@ func (h *ArchiveWSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Success: send result
 	if err := writeJSON(conn, map[string]string{
 		"event":        "completed",
 		"download_url": result.DownloadURL,
