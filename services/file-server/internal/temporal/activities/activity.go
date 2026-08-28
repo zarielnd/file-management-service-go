@@ -25,15 +25,15 @@ func NewActivities(storageClient client.StorageClient) *Activities {
 	}
 }
 
-// Activity 1: Resolve presigned URLs via Storage Service gRPC
-func (a *Activities) ResolveFilesActivity(ctx context.Context, fileIDs []string) ([]ResolvedFile, error) {
+func (a *Activities) ResolveFilesActivity(ctx context.Context, userID string, fileIDs []string) ([]ResolvedFile, error) {
+	ctx = client.WithUserID(ctx, userID)
 	urls, err := a.storageClient.GetDownloadURLs(ctx, fileIDs)
 	if err != nil {
 		return nil, fmt.Errorf("GetDownloadURLs: %w", err)
 	}
 
 	var out []ResolvedFile
-	for _, u := range urls { // urls is []client.DownloadURL, not urls.Files
+	for _, u := range urls {
 		out = append(out, ResolvedFile{
 			FileID:    u.FileID,
 			Name:      u.Name,
@@ -44,7 +44,6 @@ func (a *Activities) ResolveFilesActivity(ctx context.Context, fileIDs []string)
 	return out, nil
 }
 
-// Activity 2: Download single file via HTTP directly to S3/MinIO
 func (a *Activities) DownloadFileActivity(ctx context.Context, input DownloadFileInput) error {
 	if err := os.MkdirAll(filepath.Dir(input.TempPath), 0755); err != nil {
 		return err
@@ -75,7 +74,6 @@ func (a *Activities) DownloadFileActivity(ctx context.Context, input DownloadFil
 	return err
 }
 
-// Activity 3: Zip downloaded files
 func (a *Activities) ZipFilesActivity(ctx context.Context, input ZipInput) error {
 	if err := os.MkdirAll(filepath.Dir(input.OutputPath), 0755); err != nil {
 		return err
@@ -111,18 +109,16 @@ func (a *Activities) ZipFilesActivity(ctx context.Context, input ZipInput) error
 	return zw.Close()
 }
 
-// Activity 4: Upload final archive back to Storage Service via gRPC streaming
-// Activity 4: Upload archive to short-lived storage and return presigned download URL
 func (a *Activities) UploadArchiveActivity(ctx context.Context, input UploadArchiveInput) (string, error) {
+	ctx = client.WithUserID(ctx, input.UserID) // NEW: inject userID
+
 	archivePath := fmt.Sprintf("archives/%s", input.Name)
 
-	// 1. Get presigned PUT URL for archive bucket (no DB record)
 	uploadURL, err := a.storageClient.GetArchiveUploadURL(ctx, archivePath, "application/zip")
 	if err != nil {
 		return "", fmt.Errorf("get archive upload url: %w", err)
 	}
 
-	// 2. Upload zip directly to S3/MinIO archive bucket via HTTP PUT
 	zipFile, err := os.Open(input.ZipPath)
 	if err != nil {
 		return "", fmt.Errorf("open zip: %w", err)
@@ -152,7 +148,6 @@ func (a *Activities) UploadArchiveActivity(ctx context.Context, input UploadArch
 		return "", fmt.Errorf("upload failed: %d %s", httpResp.StatusCode, string(body))
 	}
 
-	// 3. Get presigned GET URL from archive bucket (no DB lookup needed)
 	downloadURL, err := a.storageClient.GetArchiveDownloadURL(ctx, archivePath)
 	if err != nil {
 		return "", fmt.Errorf("get archive download url: %w", err)
@@ -161,7 +156,6 @@ func (a *Activities) UploadArchiveActivity(ctx context.Context, input UploadArch
 	return downloadURL, nil
 }
 
-// Activity 5: Cleanup temp files
 func (a *Activities) CleanupActivity(ctx context.Context, tempDir string) error {
 	return os.RemoveAll(tempDir)
 }

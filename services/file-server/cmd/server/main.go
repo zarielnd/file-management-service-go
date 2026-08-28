@@ -55,7 +55,7 @@ func main() {
 	fileSvc := service.NewFileService(storageClient, tc, cfg.TemporalQueue, cfg.MaxUploadSize)
 	fileHandler := file.NewFileHandler(fileSvc, cfg, cfg.MaxMultipartMemory)
 	healthHandler := health.NewHealthHandler()
-	archiveWS := file.NewArchiveWSHandler(tc)
+	archiveWS := file.NewArchiveWSHandler(tc, authSvc)
 
 	mux := http.NewServeMux()
 

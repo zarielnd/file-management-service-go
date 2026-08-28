@@ -262,12 +262,14 @@ func (s *GRPCServer) ConfirmUpload(ctx context.Context, req *storagev2.ConfirmUp
 	if err := validateServiceKey(ctx, s.serviceKey); err != nil {
 		return nil, err
 	}
-
-	file, err := s.service.ConfirmUpload(ctx, req.FileId, req.SizeBytes, req.Checksum)
+	userID := userIDFromContext(ctx)
+	if userID == "" {
+		return nil, status.Error(codes.Unauthenticated, "missing user id")
+	}
+	file, err := s.service.ConfirmUpload(ctx, req.FileId, req.SizeBytes, req.Checksum, userID)
 	if err != nil {
 		return nil, mapError(err)
 	}
-
 	return domainToProto(*file), nil
 }
 

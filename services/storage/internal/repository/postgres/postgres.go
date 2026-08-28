@@ -37,11 +37,11 @@ func (r *Repository) Close() error {
 }
 
 func (r *Repository) Create(ctx context.Context, file *repository.File) error {
-	query := `INSERT INTO files (id, name, storage_path, content_type, size_bytes, checksum, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`
+	query := `INSERT INTO files (id, name, storage_path, content_type, size_bytes, checksum, created_at, owner_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
 
 	_, err := r.db.ExecContext(ctx, query,
-		file.ID, file.Name, file.StoragePath, file.ContentType, file.SizeBytes, file.Checksum, file.CreatedAt)
+		file.ID, file.Name, file.StoragePath, file.ContentType, file.SizeBytes, file.Checksum, file.CreatedAt, file.OwnerID)
 	if err != nil {
 		return fmt.Errorf("failed to insert file: %w", err)
 	}

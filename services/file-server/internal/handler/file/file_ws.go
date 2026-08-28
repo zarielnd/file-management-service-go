@@ -10,6 +10,8 @@ import (
 	"github.com/gorilla/websocket"
 	"go.temporal.io/sdk/client"
 
+	"github.com/zarielnd/file-management-service-go/services/file-server/internal/auth"
+	grpcClient "github.com/zarielnd/file-management-service-go/services/file-server/internal/client"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/temporal/workflows"
 )
 
@@ -19,13 +21,31 @@ var upgrader = websocket.Upgrader{
 
 type ArchiveWSHandler struct {
 	temporalClient client.Client
+	authService    *auth.Service
 }
 
-func NewArchiveWSHandler(tc client.Client) *ArchiveWSHandler {
-	return &ArchiveWSHandler{temporalClient: tc}
+func NewArchiveWSHandler(tc client.Client, authSvc *auth.Service) *ArchiveWSHandler {
+	return &ArchiveWSHandler{
+		temporalClient: tc,
+		authService:    authSvc,
+	}
 }
 
 func (h *ArchiveWSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// 1. Read access_token cookie BEFORE upgrade
+	cookie, err := r.Cookie("access_token")
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// 2. Validate it
+	userID, err := h.authService.ValidateAccessToken(r.Context(), cookie.Value)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	archiveID := r.PathValue("id")
 	if archiveID == "" {
 		http.Error(w, "missing archive id", http.StatusBadRequest)
@@ -39,7 +59,8 @@ func (h *ArchiveWSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithCancel(r.Context())
+	ctx := grpcClient.WithUserID(r.Context(), userID)
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	go func() {

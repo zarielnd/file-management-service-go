@@ -99,6 +99,12 @@ func (s *FileService) Metadata(ctx context.Context, id string) (domain.File, err
 }
 
 func (s *FileService) StartArchiveWorkflow(ctx context.Context, ids []string) (archiveID string, wsEndpoint string, err error) {
+	userID := client.UserIDFromContext(ctx)
+	if userID == "" {
+		return "", "", apperror.Unauthorized("missing user id")
+	}
+
+	// Ownership check
 	urls, err := s.storageClient.GetDownloadURLs(ctx, ids)
 	if err != nil {
 		return "", "", err
@@ -108,7 +114,6 @@ func (s *FileService) StartArchiveWorkflow(ctx context.Context, ids []string) (a
 	}
 
 	archiveID = uuid.Must(uuid.NewV7()).String()
-
 	_, err = s.temporalClient.ExecuteWorkflow(ctx,
 		temporalClient.StartWorkflowOptions{
 			ID:        "archive-" + archiveID,
@@ -118,6 +123,7 @@ func (s *FileService) StartArchiveWorkflow(ctx context.Context, ids []string) (a
 		workflows.ArchiveRequest{
 			FileIDs:   ids,
 			ArchiveID: archiveID,
+			UserID:    userID,
 		},
 	)
 	if err != nil {

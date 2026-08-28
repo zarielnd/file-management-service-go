@@ -200,11 +200,11 @@ func (s *FileService) ReserveUpload(ctx context.Context, name, contentType, owne
 	return &file, url, nil
 }
 
-func (s *FileService) ConfirmUpload(ctx context.Context, id string, size int64, checksum string) (*repository.File, error) {
+func (s *FileService) ConfirmUpload(ctx context.Context, id string, size int64, checksum string, userID string) (*repository.File, error) {
 	if err := s.repo.ConfirmUpload(ctx, id, size, checksum); err != nil {
-		return &repository.File{}, err
+		return nil, err
 	}
-	return s.repo.GetByID(ctx, id, "")
+	return s.repo.GetByID(ctx, id, userID)
 }
 
 func (s *FileService) PresignArchiveStore(ctx context.Context, path string, contentType string) (string, error) {
