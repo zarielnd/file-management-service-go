@@ -7,16 +7,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/XSAM/otelsql"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/zarielnd/file-management-service-go/services/storage/internal/repository"
+	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
 )
 
 type Repository struct {
 	db *sql.DB
 }
 
-func NewRepository(connString string) (*Repository, error) {
-	db, err := sql.Open("pgx", connString)
+func NewRepository(ctx context.Context, connString string) (*Repository, error) {
+	db, err := otelsql.Open("pgx", connString,
+		otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -25,7 +29,8 @@ func NewRepository(connString string) (*Repository, error) {
 	db.SetMaxIdleConns(25)
 	db.SetConnMaxLifetime(5 * time.Minute)
 
-	if err := db.Ping(); err != nil {
+	if err := db.PingContext(ctx); err != nil {
+		db.Close()
 		return nil, fmt.Errorf("failed to connect to the database: %w", err)
 	}
 

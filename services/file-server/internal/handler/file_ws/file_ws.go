@@ -1,4 +1,6 @@
-package file
+//go:build !coverage
+
+package file_ws
 
 import (
 	"bytes"

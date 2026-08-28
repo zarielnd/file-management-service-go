@@ -20,7 +20,7 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-// --- Upload: separate t.Run because multipart setup is complex ---
+// --- Upload ---
 
 func TestFileHandler_Upload(t *testing.T) {
 	t.Run("success single file", func(t *testing.T) {
@@ -40,11 +40,9 @@ func TestFileHandler_Upload(t *testing.T) {
 				if string(content) != "hello" {
 					t.Errorf("content = %q, want %q", content, "hello")
 				}
-
 				if in.ContentType != "text/plain" {
 					t.Errorf("content type = %q, want %q", in.ContentType, "text/plain")
 				}
-
 				if in.Size != 5 {
 					t.Errorf("size = %d, want 5", in.Size)
 				}
@@ -55,17 +53,13 @@ func TestFileHandler_Upload(t *testing.T) {
 		var body bytes.Buffer
 		writer := multipart.NewWriter(&body)
 		header := make(textproto.MIMEHeader)
-		header.Set(
-			"Content-Disposition",
-			`form-data; name="files"; filename="test.txt"`,
-		)
+		header.Set("Content-Disposition", `form-data; name="files"; filename="test.txt"`)
 		header.Set("Content-Type", "text/plain")
 
 		part, err := writer.CreatePart(header)
 		if err != nil {
 			t.Fatal(err)
 		}
-
 		_, err = io.WriteString(part, "hello")
 		if err != nil {
 			t.Fatal(err)
@@ -93,6 +87,68 @@ func TestFileHandler_Upload(t *testing.T) {
 		}
 		if resp.Files[0].ID != "123" {
 			t.Errorf("id = %s, want 123", resp.Files[0].ID)
+		}
+	})
+
+	// NEW: covers the loop accumulation and multiple file handling
+	t.Run("success multiple files", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockSvc := mocks.NewMockFileService(ctrl)
+		h := NewFileHandler(mockSvc, &config.Config{UseTemporalArchive: false}, 32<<20)
+
+		mockSvc.EXPECT().Upload(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, in client.UploadInput) (domain.File, error) {
+				return domain.File{ID: in.Name + "-id", Name: in.Name}, nil
+			},
+		).Times(2)
+
+		var body bytes.Buffer
+		writer := multipart.NewWriter(&body)
+
+		for _, name := range []string{"a.txt", "b.txt"} {
+			part, _ := writer.CreateFormFile("files", name)
+			_, _ = io.WriteString(part, "content")
+		}
+		writer.Close()
+
+		req := httptest.NewRequest(http.MethodPost, "/upload", &body)
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+		rr := httptest.NewRecorder()
+
+		h.Upload(rr, req)
+
+		if rr.Code != http.StatusCreated {
+			t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+		}
+
+		var resp struct {
+			Files []domain.File `json:"files"`
+		}
+		if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+			t.Fatal(err)
+		}
+		if len(resp.Files) != 2 {
+			t.Fatalf("files count = %d, want 2", len(resp.Files))
+		}
+		if resp.Files[0].Name != "a.txt" || resp.Files[1].Name != "b.txt" {
+			t.Errorf("names = %v, want [a.txt b.txt]", []string{resp.Files[0].Name, resp.Files[1].Name})
+		}
+	})
+
+	// NEW: covers ParseMultipartForm error branch
+	t.Run("invalid multipart form", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockSvc := mocks.NewMockFileService(ctrl)
+		h := NewFileHandler(mockSvc, &config.Config{UseTemporalArchive: false}, 32<<20)
+
+		req := httptest.NewRequest(http.MethodPost, "/upload", strings.NewReader("not multipart"))
+		req.Header.Set("Content-Type", "text/plain")
+		rr := httptest.NewRecorder()
+
+		h.Upload(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("status = %d, want %d", rr.Code, http.StatusBadRequest)
 		}
 	})
 
@@ -143,7 +199,7 @@ func TestFileHandler_Upload(t *testing.T) {
 	})
 }
 
-// --- Download: separate t.Run because io.ReadCloser setup is complex ---
+// --- Download ---
 
 func TestFileHandler_Download(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
@@ -388,19 +444,12 @@ func TestFileHandler_DownloadMultiple(t *testing.T) {
 
 			rr := httptest.NewRecorder()
 
-			// Act
 			h.DownloadMultiple(rr, req)
 
-			// Assert status
 			if rr.Code != tt.wantCode {
-				t.Fatalf(
-					"status = %d, want %d",
-					rr.Code,
-					tt.wantCode,
-				)
+				t.Fatalf("status = %d, want %d", rr.Code, tt.wantCode)
 			}
 
-			// Error cases don't need to check successful response body.
 			if tt.wantCode != http.StatusAccepted {
 				return
 			}

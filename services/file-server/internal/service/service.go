@@ -56,6 +56,7 @@ func (s *FileService) Upload(ctx context.Context, input client.UploadInput) (dom
 
 	size, err := s.uploadToPresignedURL(ctx, reserved.UploadURL, tee, input.Size)
 	if err != nil {
+
 		return domain.File{}, apperror.Internal("upload failed")
 	}
 
