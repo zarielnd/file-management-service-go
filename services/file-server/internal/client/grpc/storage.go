@@ -1,51 +1,61 @@
-package grpc
+package connectrpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"strings"
+
+	"connectrpc.com/connect"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	storagev2 "github.com/zarielnd/file-management-service-go/gen/storage/v2"
+	storagev2connect "github.com/zarielnd/file-management-service-go/gen/storage/v2/storagev2connect"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/client"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/domain"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 )
 
 type storageClient struct {
-	client     storagev2.StorageServiceClient
+	client     storagev2connect.StorageServiceClient
 	serviceKey string
 }
 
 func NewStorageClient(target, serviceKey string) (client.StorageClient, func() error, error) {
-	conn, err := grpc.NewClient(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return nil, nil, err
+	tr := &http.Transport{}
+	tr.Protocols = new(http.Protocols)
+	tr.Protocols.SetUnencryptedHTTP2(true)
+
+	httpClient := &http.Client{
+		Transport: otelhttp.NewTransport(tr),
 	}
+
 	c := &storageClient{
-		client:     storagev2.NewStorageServiceClient(conn),
+		client:     storagev2connect.NewStorageServiceClient(httpClient, normalizeTarget(target)),
 		serviceKey: serviceKey,
 	}
-	return c, conn.Close, nil
+
+	return c, func() error { return nil }, nil
 }
 
-func (c *storageClient) withAuth(ctx context.Context) context.Context {
-	md := metadata.MD{}
-	md.Set("x-service-key", c.serviceKey)
-	if userID := client.UserIDFromContext(ctx); userID != "" {
-		md.Set("x-user-id", userID)
+func normalizeTarget(target string) string {
+	if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") {
+		return target
 	}
-	return metadata.NewOutgoingContext(ctx, md)
+	return "http://" + target
+}
+
+func setAuthHeader(h http.Header, ctx context.Context, serviceKey string) {
+	h.Set("X-Service-Key", serviceKey)
+	if userID := client.UserIDFromContext(ctx); userID != "" {
+		h.Set("X-User-Id", userID)
+	}
 }
 
 func (c *storageClient) Store(ctx context.Context, input client.UploadInput) (domain.File, error) {
-	stream, err := c.client.UploadFile(c.withAuth(ctx))
-	if err != nil {
-		return domain.File{}, err
-	}
+	stream := c.client.UploadFile(ctx)
+	setAuthHeader(stream.RequestHeader(), ctx, c.serviceKey)
 
 	if err := stream.Send(&storagev2.UploadFileRequest{
 		Payload: &storagev2.UploadFileRequest_Info{
@@ -77,47 +87,54 @@ func (c *storageClient) Store(ctx context.Context, input client.UploadInput) (do
 		}
 	}
 
-	resp, err := stream.CloseAndRecv()
+	resp, err := stream.CloseAndReceive()
 	if err != nil {
 		return domain.File{}, err
 	}
 
-	return protoToDomain(resp.File), nil
+	return protoToDomain(resp.Msg.File), nil
 }
 
 func (c *storageClient) Fetch(ctx context.Context, id string) (io.ReadCloser, domain.File, error) {
-	stream, err := c.client.GetFile(c.withAuth(ctx), &storagev2.GetFileRequest{Id: id})
+	req := connect.NewRequest(&storagev2.GetFileRequest{Id: id})
+	setAuthHeader(req.Header(), ctx, c.serviceKey)
+
+	stream, err := c.client.GetFile(ctx, req)
 	if err != nil {
 		return nil, domain.File{}, err
 	}
 
-	resp, err := stream.Recv()
-	if err != nil {
-		return nil, domain.File{}, err
+	if !stream.Receive() {
+		err := stream.Err()
+		stream.Close()
+		if err != nil {
+			return nil, domain.File{}, err
+		}
+		return nil, domain.File{}, errors.New("empty file stream")
 	}
 
-	file := protoToDomain(resp.Metadata)
+	file := protoToDomain(stream.Msg().Metadata)
+	firstChunk := stream.Msg().Data
 
 	pr, pw := io.Pipe()
 	go func() {
 		defer pw.Close()
-		if _, err := pw.Write(resp.Data); err != nil {
-			pw.CloseWithError(err)
-			return
+		defer stream.Close()
+
+		if len(firstChunk) > 0 {
+			if _, err := pw.Write(firstChunk); err != nil {
+				pw.CloseWithError(err)
+				return
+			}
 		}
-		for {
-			resp, err := stream.Recv()
-			if err == io.EOF {
-				return
-			}
-			if err != nil {
+		for stream.Receive() {
+			if _, err := pw.Write(stream.Msg().Data); err != nil {
 				pw.CloseWithError(err)
 				return
 			}
-			if _, err := pw.Write(resp.Data); err != nil {
-				pw.CloseWithError(err)
-				return
-			}
+		}
+		if err := stream.Err(); err != nil {
+			pw.CloseWithError(err)
 		}
 	}()
 
@@ -125,31 +142,40 @@ func (c *storageClient) Fetch(ctx context.Context, id string) (io.ReadCloser, do
 }
 
 func (c *storageClient) Metadata(ctx context.Context, id string) (domain.File, error) {
-	resp, err := c.client.GetMetadata(c.withAuth(ctx), &storagev2.GetMetadataRequest{Id: id})
+	req := connect.NewRequest(&storagev2.GetMetadataRequest{Id: id})
+	setAuthHeader(req.Header(), ctx, c.serviceKey)
+
+	resp, err := c.client.GetMetadata(ctx, req)
 	if err != nil {
 		return domain.File{}, err
 	}
-	return protoToDomain(resp), nil
+	return protoToDomain(resp.Msg), nil
 }
 
 func (c *storageClient) List(ctx context.Context, page, pageSize int) ([]domain.File, int, error) {
-	resp, err := c.client.ListFiles(c.withAuth(ctx), &storagev2.ListFilesRequest{
+	req := connect.NewRequest(&storagev2.ListFilesRequest{
 		Page:     int32(page),
 		PageSize: int32(pageSize),
 	})
+	setAuthHeader(req.Header(), ctx, c.serviceKey)
+
+	resp, err := c.client.ListFiles(ctx, req)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	files := make([]domain.File, 0, len(resp.Files))
-	for _, f := range resp.Files {
+	files := make([]domain.File, 0, len(resp.Msg.Files))
+	for _, f := range resp.Msg.Files {
 		files = append(files, protoToDomain(f))
 	}
-	return files, int(resp.Total), nil
+	return files, int(resp.Msg.Total), nil
 }
 
 func (c *storageClient) DownloadArchive(ctx context.Context, ids []string) (io.ReadCloser, error) {
-	stream, err := c.client.DownloadArchive(c.withAuth(ctx), &storagev2.DownloadArchiveRequest{FileIds: ids})
+	req := connect.NewRequest(&storagev2.DownloadArchiveRequest{FileIds: ids})
+	setAuthHeader(req.Header(), ctx, c.serviceKey)
+
+	stream, err := c.client.DownloadArchive(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -157,34 +183,31 @@ func (c *storageClient) DownloadArchive(ctx context.Context, ids []string) (io.R
 	pr, pw := io.Pipe()
 	go func() {
 		defer pw.Close()
-		for {
-			resp, err := stream.Recv()
-			if err == io.EOF {
-				return
-			}
-			if err != nil {
+		defer stream.Close()
+		for stream.Receive() {
+			if _, err := pw.Write(stream.Msg().Data); err != nil {
 				pw.CloseWithError(err)
 				return
 			}
-			if _, err := pw.Write(resp.Data); err != nil {
-				pw.CloseWithError(err)
-				return
-			}
+		}
+		if err := stream.Err(); err != nil {
+			pw.CloseWithError(err)
 		}
 	}()
 	return pr, nil
 }
 
 func (c *storageClient) GetDownloadURLs(ctx context.Context, ids []string) ([]client.DownloadURL, error) {
-	resp, err := c.client.GetDownloadURLs(c.withAuth(ctx), &storagev2.GetDownloadURLsRequest{
-		FileIds: ids,
-	})
+	req := connect.NewRequest(&storagev2.GetDownloadURLsRequest{FileIds: ids})
+	setAuthHeader(req.Header(), ctx, c.serviceKey)
+
+	resp, err := c.client.GetDownloadURLs(ctx, req)
 	if err != nil {
-		return nil, mapGRPCError(err)
+		return nil, mapConnectError(err)
 	}
 
 	var out []client.DownloadURL
-	for _, f := range resp.Files {
+	for _, f := range resp.Msg.Files {
 		out = append(out, client.DownloadURL{
 			FileID:    f.FileId,
 			Name:      f.Name,
@@ -196,64 +219,74 @@ func (c *storageClient) GetDownloadURLs(ctx context.Context, ids []string) ([]cl
 }
 
 func (c *storageClient) GetUploadURL(ctx context.Context, filename, contentType string) (client.UploadURL, error) {
-	resp, err := c.client.GetUploadURL(c.withAuth(ctx), &storagev2.GetUploadURLRequest{
+	req := connect.NewRequest(&storagev2.GetUploadURLRequest{
 		Filename:    filename,
 		ContentType: contentType,
 	})
+	setAuthHeader(req.Header(), ctx, c.serviceKey)
+
+	resp, err := c.client.GetUploadURL(ctx, req)
 	if err != nil {
-		return client.UploadURL{}, mapGRPCError(err)
+		return client.UploadURL{}, mapConnectError(err)
 	}
 	return client.UploadURL{
-		UploadURL: resp.UploadUrl,
-		FileID:    resp.FileId,
+		UploadURL: resp.Msg.UploadUrl,
+		FileID:    resp.Msg.FileId,
 	}, nil
 }
 
 func (c *storageClient) ConfirmUpload(ctx context.Context, fileID string, size int64, checksum string) (domain.File, error) {
-	resp, err := c.client.ConfirmUpload(c.withAuth(ctx), &storagev2.ConfirmUploadRequest{
+	req := connect.NewRequest(&storagev2.ConfirmUploadRequest{
 		FileId:    fileID,
 		SizeBytes: size,
 		Checksum:  checksum,
 	})
+	setAuthHeader(req.Header(), ctx, c.serviceKey)
+
+	resp, err := c.client.ConfirmUpload(ctx, req)
 	if err != nil {
-		return domain.File{}, mapGRPCError(err)
+		return domain.File{}, mapConnectError(err)
 	}
-	return protoToDomain(resp), nil
+	return protoToDomain(resp.Msg), nil
 }
 
 func (c *storageClient) GetArchiveUploadURL(ctx context.Context, path, contentType string) (string, error) {
-	resp, err := c.client.GetArchiveUploadURL(c.withAuth(ctx), &storagev2.GetArchiveUploadURLRequest{
+	req := connect.NewRequest(&storagev2.GetArchiveUploadURLRequest{
 		Path:        path,
 		ContentType: contentType,
 	})
+	setAuthHeader(req.Header(), ctx, c.serviceKey)
+
+	resp, err := c.client.GetArchiveUploadURL(ctx, req)
 	if err != nil {
-		return "", mapGRPCError(err)
+		return "", mapConnectError(err)
 	}
-	return resp.UploadUrl, nil
+	return resp.Msg.UploadUrl, nil
 }
 
 func (c *storageClient) GetArchiveDownloadURL(ctx context.Context, path string) (string, error) {
-	resp, err := c.client.GetArchiveDownloadURL(c.withAuth(ctx), &storagev2.GetArchiveDownloadURLRequest{
-		Path: path,
-	})
+	req := connect.NewRequest(&storagev2.GetArchiveDownloadURLRequest{Path: path})
+	setAuthHeader(req.Header(), ctx, c.serviceKey)
+
+	resp, err := c.client.GetArchiveDownloadURL(ctx, req)
 	if err != nil {
-		return "", mapGRPCError(err)
+		return "", mapConnectError(err)
 	}
-	return resp.DownloadUrl, nil
+	return resp.Msg.DownloadUrl, nil
 }
 
-func mapGRPCError(err error) error {
-	st, ok := status.FromError(err)
-	if !ok {
+func mapConnectError(err error) error {
+	var connectErr *connect.Error
+	if !errors.As(err, &connectErr) {
 		return err
 	}
-	switch st.Code() {
-	case codes.NotFound:
-		return fmt.Errorf("not found: %s", st.Message())
-	case codes.InvalidArgument:
-		return fmt.Errorf("invalid argument: %s", st.Message())
+	switch connectErr.Code() {
+	case connect.CodeNotFound:
+		return fmt.Errorf("not found: %s", connectErr.Message())
+	case connect.CodeInvalidArgument:
+		return fmt.Errorf("invalid argument: %s", connectErr.Message())
 	default:
-		return fmt.Errorf("storage error: %s", st.Message())
+		return fmt.Errorf("storage error: %s", connectErr.Message())
 	}
 }
 

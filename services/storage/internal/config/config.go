@@ -28,6 +28,9 @@ type Config struct {
 	S3UsePathStyle   bool // true for MinIO/LocalStack
 
 	DBConnectionString string
+	Environment        string
+
+	GoogleCloudProject string
 }
 
 func Load() (*Config, error) {
@@ -52,6 +55,8 @@ func Load() (*Config, error) {
 		S3UsePathStyle:   getEnv("S3_USE_PATH_STYLE", "true") == "true",
 
 		DBConnectionString: getEnv("DATABASE_URL", ""),
+		Environment:        getEnv("DEPLOYMENT_ENVIRONMENT", "production"),
+		GoogleCloudProject: getEnv("GOOGLE_CLOUD_PROJECT", ""),
 	}
 
 	// Only create local directories when using local backend

@@ -18,12 +18,16 @@ type Config struct {
 	TemporalHost       string
 	TemporalQueue      string
 	DatabaseURL        string
+	DatabaseName       string
 	RedisAddr          string
 	//auth
 	JWTSecret       string
 	ServiceKey      string
 	AccessTokenTTL  time.Duration
 	RefreshTokenTTL time.Duration
+
+	Environment        string
+	GoogleCloudProject string
 }
 
 func Load() (*Config, error) {
@@ -50,11 +54,14 @@ func Load() (*Config, error) {
 		TemporalHost:       getEnv("TEMPORAL_HOST", "temporal:7233"),
 		TemporalQueue:      getEnv("TEMPORAL_QUEUE", "archive-queue"),
 		DatabaseURL:        getEnv("DATABASE_URL", ""),
+		DatabaseName:       getEnv("POSTGRES_DB", ""),
 		RedisAddr:          getEnv("REDIS_ADDR", "localhost:6379"),
 		JWTSecret:          getEnv("JWT_SECRET", "change-me-in-production"),
 		AccessTokenTTL:     time.Duration(accessTTL) * time.Minute,
 		RefreshTokenTTL:    time.Duration(refreshTTL) * 24 * time.Hour,
 		ServiceKey:         getEnv("SERVICE_KEY", ""),
+		Environment:        getEnv("DEPLOYMENT_ENVIRONMENT", "production"),
+		GoogleCloudProject: getEnv("GOOGLE_CLOUD_PROJECT", ""),
 	}, nil
 }
 

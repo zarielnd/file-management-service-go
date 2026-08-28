@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-sdk-go-v2/otelaws"
 )
 
 type Store struct {
@@ -39,7 +40,11 @@ func NewStore(ctx context.Context, cfg Config) (*Store, error) {
 	loadOptions := []func(*awsconfig.LoadOptions) error{
 		awsconfig.WithRegion(cfg.Region),
 		awsconfig.WithCredentialsProvider(
-			credentials.NewStaticCredentialsProvider(cfg.AccessKey, cfg.SecretKey, ""),
+			credentials.NewStaticCredentialsProvider(
+				cfg.AccessKey,
+				cfg.SecretKey,
+				"",
+			),
 		),
 	}
 
@@ -48,14 +53,19 @@ func NewStore(ctx context.Context, cfg Config) (*Store, error) {
 		return nil, fmt.Errorf("failed to load AWS config: %w", err)
 	}
 
-	// Internal client — actual HTTP calls to MinIO from inside Docker
+	// Internal client — actual HTTP calls to MinIO/S3.
 	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 		o.UsePathStyle = cfg.UsePathStyle
+
 		if cfg.Endpoint != "" {
 			o.BaseEndpoint = aws.String(cfg.Endpoint)
 		}
+
+		// Add OpenTelemetry instrumentation.
+		otelaws.AppendMiddlewares(&o.APIOptions)
 	})
 
+	// Verify main bucket.
 	_, err = client.HeadBucket(ctx, &s3.HeadBucketInput{
 		Bucket: aws.String(cfg.Bucket),
 	})
@@ -66,21 +76,29 @@ func NewStore(ctx context.Context, cfg Config) (*Store, error) {
 	if cfg.ArchiveBucket == "" {
 		return nil, fmt.Errorf("archive bucket is required")
 	}
+
+	// Verify archive bucket.
 	_, err = client.HeadBucket(ctx, &s3.HeadBucketInput{
 		Bucket: aws.String(cfg.ArchiveBucket),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to access archive bucket %s: %w", cfg.ArchiveBucket, err)
+		return nil, fmt.Errorf(
+			"failed to access archive bucket %s: %w",
+			cfg.ArchiveBucket,
+			err,
+		)
 	}
 
-	// External client — only for generating browser-facing presigned URLs
+	// External client — only used for browser-facing presigned URLs.
 	externalS3Client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 		o.UsePathStyle = cfg.UsePathStyle
+
 		if cfg.PublicEndpoint != "" {
 			o.BaseEndpoint = aws.String(cfg.PublicEndpoint)
 		} else if cfg.Endpoint != "" {
 			o.BaseEndpoint = aws.String(cfg.Endpoint)
 		}
+
 		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
 		o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
 	})

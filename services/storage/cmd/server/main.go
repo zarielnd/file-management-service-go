@@ -3,36 +3,59 @@ package main
 import (
 	"context"
 	"log"
-	"net"
+	"log/slog"
+	"net/http"
 	"os"
 
-	storagev2 "github.com/zarielnd/file-management-service-go/gen/storage/v2"
+	"connectrpc.com/connect"
+	"connectrpc.com/grpchealth"
+	"connectrpc.com/otelconnect"
+	storagev2connect "github.com/zarielnd/file-management-service-go/gen/storage/v2/storagev2connect"
 	"github.com/zarielnd/file-management-service-go/services/storage/internal/config"
+	"github.com/zarielnd/file-management-service-go/services/storage/internal/observability"
 	"github.com/zarielnd/file-management-service-go/services/storage/internal/repository/postgres"
 	"github.com/zarielnd/file-management-service-go/services/storage/internal/server"
 	"github.com/zarielnd/file-management-service-go/services/storage/internal/service"
 	"github.com/zarielnd/file-management-service-go/services/storage/internal/storage"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/health"
-	"google.golang.org/grpc/health/grpc_health_v1"
 )
 
 func main() {
 	ctx := context.Background()
 
+	// ---- 1. Config ----
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
+	// ---- 2. Observability ----
+	shutdown, err := observability.Init(ctx, observability.InitOptions{
+		ServiceName:    "storage-service",
+		ServiceVersion: "1.0.0",
+		Environment:    cfg.Environment,
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "failed to init observability", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := shutdown(ctx); err != nil {
+			slog.ErrorContext(ctx, "observability shutdown error", "error", err)
+		}
+	}()
+
+	// ---- 3. Storage provider ----
 	provider, err := storage.NewProviderFromConfig(ctx, cfg)
 	if err != nil {
-		log.Fatalf("failed to init storage: %v", err)
+		slog.ErrorContext(ctx, "failed to init storage", "error", err)
+		os.Exit(1)
 	}
 
-	repo, err := postgres.NewRepository(cfg.DBConnectionString)
+	// ---- 4. DB (see note below about otelsql) ----
+	repo, err := postgres.NewRepository(ctx, cfg.DBConnectionString)
 	if err != nil {
-		log.Fatalf("failed to connect to db: %v", err)
+		slog.ErrorContext(ctx, "failed to connect to db", "error", err)
+		os.Exit(1)
 	}
 	defer repo.Close()
 
@@ -40,26 +63,41 @@ func main() {
 
 	serviceKey := os.Getenv("SERVICE_KEY")
 	if serviceKey == "" {
-		log.Println("WARNING: SERVICE_KEY not set, gRPC auth disabled")
+		slog.WarnContext(ctx, "SERVICE_KEY not set, Connect auth disabled")
 	}
 
-	grpcServer := server.NewGRPCServer(fileSvc, serviceKey)
+	connectServer := server.NewConnectServer(fileSvc, serviceKey)
 
-	lis, err := net.Listen("tcp", ":"+cfg.GRPCPort)
+	// ---- 5. Connect handler with OTel interceptor ----
+	otelInterceptor, err := otelconnect.NewInterceptor()
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		slog.ErrorContext(ctx, "failed to create otel interceptor", "error", err)
+		os.Exit(1)
 	}
 
-	s := grpc.NewServer()
+	path, handler := storagev2connect.NewStorageServiceHandler(
+		connectServer,
+		connect.WithInterceptors(otelInterceptor),
+	)
 
-	healthServer := health.NewServer()
-	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
-	grpc_health_v1.RegisterHealthServer(s, healthServer)
+	mux := http.NewServeMux()
+	mux.Handle(path, handler)
 
-	storagev2.RegisterStorageServiceServer(s, grpcServer)
+	checker := grpchealth.NewStaticChecker(storagev2connect.StorageServiceName)
+	mux.Handle(grpchealth.NewHandler(checker))
 
-	log.Printf("storage service running on :%s", cfg.GRPCPort)
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
+	// ---- 6. HTTP server with observability middleware ----
+	srv := &http.Server{
+		Addr:    ":" + cfg.GRPCPort,
+		Handler: mux,
+	}
+	srv.Protocols = new(http.Protocols)
+	srv.Protocols.SetHTTP1(true)
+	srv.Protocols.SetUnencryptedHTTP2(true)
+
+	slog.InfoContext(ctx, "storage service running", "port", cfg.GRPCPort)
+	if err := srv.ListenAndServe(); err != nil {
+		slog.ErrorContext(ctx, "failed to serve", "error", err)
+		os.Exit(1)
 	}
 }

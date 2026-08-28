@@ -1,8 +1,14 @@
 .PHONY: all build test test-race fmt vet proto \
-        docker-up docker-up-build docker-down docker-down-volumes \
-        docker-build clean
+        up up-build down down-v \
+        d-build clean
 
 SERVICES := file-server storage
+
+ifeq ($(OS),Windows_NT)
+	RM := cmd /c del /Q /F
+else
+	RM := rm -f
+endif
 
 # =============================================================================
 # Build
@@ -58,12 +64,13 @@ lint: ## Run golangci-lint
 # =============================================================================
 
 proto: ## Generate Go code from protobuf definitions
+	-$(RM) gen\storage\v2\*_grpc.pb.go
 	protoc \
 		--proto_path=proto \
 		--go_out=gen \
 		--go_opt=paths=source_relative \
-		--go-grpc_out=gen \
-		--go-grpc_opt=paths=source_relative \
+		--connect-go_out=gen \
+		--connect-go_opt=paths=source_relative \
 		storage/v2/storage.proto
 
 # =============================================================================
@@ -82,7 +89,7 @@ down: ## Stop docker compose
 down-v: ## Stop and remove volumes
 	docker compose down -v
 
-build: ## Build docker images
+d-build: ## Build docker images
 	docker compose build
 
 # =============================================================================

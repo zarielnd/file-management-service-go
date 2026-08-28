@@ -55,6 +55,8 @@ services:
       ACCESS_TOKEN_TTL_MINUTES: "${ACCESS_TOKEN_TTL_MINUTES}"
       REFRESH_TOKEN_TTL_DAYS: "${REFRESH_TOKEN_TTL_DAYS}"
       SERVICE_KEY: "${SERVICE_KEY}"
+      GOOGLE_CLOUD_PROJECT: "${GOOGLE_CLOUD_PROJECT}"
+      DEPLOYMENT_ENVIRONMENT: "${DEPLOYMENT_ENVIRONMENT}"
     depends_on:
       temporal:
         condition: service_started
@@ -72,6 +74,8 @@ services:
       TEMPORAL_HOST: "temporal:7233"
       TEMPORAL_QUEUE: "${TEMPORAL_QUEUE:-archive-queue}"
       SERVICE_KEY: "${SERVICE_KEY}"
+      GOOGLE_CLOUD_PROJECT: "${GOOGLE_CLOUD_PROJECT}"
+      DEPLOYMENT_ENVIRONMENT: "${DEPLOYMENT_ENVIRONMENT}"
     depends_on:
       temporal:
         condition: service_started
@@ -106,6 +110,8 @@ services:
       S3_USE_PATH_STYLE: "${S3_USE_PATH_STYLE}"
 
       SERVICE_KEY: "${SERVICE_KEY}"
+      GOOGLE_CLOUD_PROJECT: "${GOOGLE_CLOUD_PROJECT}"
+      DEPLOYMENT_ENVIRONMENT: "${DEPLOYMENT_ENVIRONMENT}"
     volumes:
       - file-data:/data
     healthcheck:
