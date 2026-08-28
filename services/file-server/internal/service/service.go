@@ -46,17 +46,14 @@ func (s *FileService) Upload(ctx context.Context, input client.UploadInput) (dom
 		return domain.File{}, apperror.Invalid("file size exceeds the maximum limit")
 	}
 
-	// 1. Reserve + get presigned URL
 	reserved, err := s.storageClient.GetUploadURL(ctx, input.Name, input.ContentType)
 	if err != nil {
 		return domain.File{}, err
 	}
 
-	// 2. Compute checksum while streaming
 	hash := sha256.New()
 	tee := io.TeeReader(input.Content, hash)
 
-	// 3. Upload directly to S3 via HTTP PUT
 	size, err := s.uploadToPresignedURL(ctx, reserved.UploadURL, tee, input.Size)
 	if err != nil {
 		return domain.File{}, apperror.Internal("upload failed")
@@ -64,7 +61,6 @@ func (s *FileService) Upload(ctx context.Context, input client.UploadInput) (dom
 
 	checksum := hex.EncodeToString(hash.Sum(nil))
 
-	// 4. Confirm with Storage Service
 	return s.storageClient.ConfirmUpload(ctx, reserved.FileID, size, checksum)
 }
 
@@ -98,17 +94,26 @@ func (s *FileService) List(ctx context.Context, page, pageSize int) ([]domain.Fi
 	return s.storageClient.List(ctx, page, pageSize)
 }
 
-func (s *FileService) DownloadMultiple(ctx context.Context, ids []string) (io.ReadCloser, error) {
-	return s.storageClient.DownloadArchive(ctx, ids)
-}
-
 func (s *FileService) Metadata(ctx context.Context, id string) (domain.File, error) {
 	return s.storageClient.Metadata(ctx, id)
 }
 
 func (s *FileService) StartArchiveWorkflow(ctx context.Context, ids []string) (archiveID string, wsEndpoint string, err error) {
-	archiveID = uuid.Must(uuid.NewV7()).String()
+	userID := client.UserIDFromContext(ctx)
+	if userID == "" {
+		return "", "", apperror.Unauthorized("missing user id")
+	}
 
+	// Ownership check
+	urls, err := s.storageClient.GetDownloadURLs(ctx, ids)
+	if err != nil {
+		return "", "", err
+	}
+	if len(urls) != len(ids) {
+		return "", "", apperror.Forbidden("one or more files not found or access denied")
+	}
+
+	archiveID = uuid.Must(uuid.NewV7()).String()
 	_, err = s.temporalClient.ExecuteWorkflow(ctx,
 		temporalClient.StartWorkflowOptions{
 			ID:        "archive-" + archiveID,
@@ -118,6 +123,7 @@ func (s *FileService) StartArchiveWorkflow(ctx context.Context, ids []string) (a
 		workflows.ArchiveRequest{
 			FileIDs:   ids,
 			ArchiveID: archiveID,
+			UserID:    userID,
 		},
 	)
 	if err != nil {

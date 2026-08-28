@@ -33,7 +33,7 @@ func NewFileService(repo repository.Repository, storage storage.Provider, baseDi
 	}
 }
 
-func (s *FileService) Store(ctx context.Context, name, contentType string, reader io.Reader) (repository.File, error) {
+func (s *FileService) Store(ctx context.Context, name, contentType, ownerID string, reader io.Reader) (repository.File, error) {
 	id := uuid.Must(uuid.NewV7()).String()
 	storagePath := s.makePath(id, name)
 
@@ -54,16 +54,16 @@ func (s *FileService) Store(ctx context.Context, name, contentType string, reade
 		SizeBytes:   size,
 		Checksum:    checksum,
 		CreatedAt:   time.Now().UTC(),
+		OwnerID:     ownerID,
 	}
-	//test
 	if err := s.repo.Create(ctx, &file); err != nil {
 		return repository.File{}, fmt.Errorf("failed to store file metadata in repository: %w", err)
 	}
 	return file, nil
 }
 
-func (s *FileService) Fetch(ctx context.Context, id string) (io.ReadCloser, repository.File, error) {
-	file, err := s.repo.GetByID(ctx, id)
+func (s *FileService) Fetch(ctx context.Context, id, userID string) (io.ReadCloser, repository.File, error) {
+	file, err := s.repo.GetByID(ctx, id, userID)
 	if err != nil {
 		return nil, repository.File{}, fmt.Errorf("failed to fetch file metadata: %w", err)
 	}
@@ -75,26 +75,26 @@ func (s *FileService) Fetch(ctx context.Context, id string) (io.ReadCloser, repo
 	return reader, *file, nil
 }
 
-func (s *FileService) Metadata(ctx context.Context, id string) (repository.File, error) {
-	file, err := s.repo.GetByID(ctx, id)
+func (s *FileService) Metadata(ctx context.Context, id, userID string) (repository.File, error) {
+	file, err := s.repo.GetByID(ctx, id, userID)
 	if err != nil {
 		return repository.File{}, fmt.Errorf("failed to fetch file metadata: %w", err)
 	}
 	return *file, nil
 }
 
-func (s *FileService) List(ctx context.Context, page, pageSize int) ([]*repository.File, int, error) {
+func (s *FileService) List(ctx context.Context, page, pageSize int, userID string) ([]*repository.File, int, error) {
 	limit := pageSize
 	offset := (page - 1) * pageSize
-	files, count, err := s.repo.List(ctx, limit, offset)
+	files, count, err := s.repo.List(ctx, userID, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list files: %w", err)
 	}
 	return files, count, nil
 }
 
-func (s *FileService) DownloadArchive(ctx context.Context, ids []string) (io.ReadCloser, error) {
-	files, err := s.repo.GetByIDs(ctx, ids)
+func (s *FileService) DownloadArchive(ctx context.Context, ids []string, userID string) (io.ReadCloser, error) {
+	files, err := s.repo.GetByIDs(ctx, ids, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch file metadata: %w", err)
 	}
@@ -152,16 +152,16 @@ func (s *FileService) DownloadArchive(ctx context.Context, ids []string) (io.Rea
 	return &deleteOnClose{File: f, path: tmpPath}, nil
 }
 
-func (s *FileService) GetByIDs(ctx context.Context, ids []string) ([]*repository.File, error) {
-	files, err := s.repo.GetByIDs(ctx, ids)
+func (s *FileService) GetByIDs(ctx context.Context, ids []string, userID string) ([]*repository.File, error) {
+	files, err := s.repo.GetByIDs(ctx, ids, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch files: %w", err)
 	}
 	return files, nil
 }
 
-func (s *FileService) PresignFetch(ctx context.Context, id string, expiry time.Duration) (string, error) {
-	file, err := s.repo.GetByID(ctx, id)
+func (s *FileService) PresignFetch(ctx context.Context, id string, userID string, expiry time.Duration) (string, error) {
+	file, err := s.repo.GetByID(ctx, id, userID)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch file metadata: %w", err)
 	}
@@ -169,14 +169,14 @@ func (s *FileService) PresignFetch(ctx context.Context, id string, expiry time.D
 }
 
 func (s *FileService) PresignStore(ctx context.Context, id string, expiry time.Duration) (string, error) {
-	file, err := s.repo.GetByID(ctx, id)
+	file, err := s.repo.GetByID(ctx, id, "")
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch file metadata: %w", err)
 	}
 	return s.storage.PresignStore(ctx, file.StoragePath, expiry)
 }
 
-func (s *FileService) ReserveUpload(ctx context.Context, name, contentType string) (*repository.File, string, error) {
+func (s *FileService) ReserveUpload(ctx context.Context, name, contentType, ownerID string) (*repository.File, string, error) {
 	id := uuid.Must(uuid.NewV7()).String()
 	storagePath := s.makePath(id, name)
 
@@ -186,6 +186,7 @@ func (s *FileService) ReserveUpload(ctx context.Context, name, contentType strin
 		StoragePath: storagePath,
 		ContentType: contentType,
 		CreatedAt:   time.Now().UTC(),
+		OwnerID:     ownerID,
 	}
 	if err := s.repo.Create(ctx, &file); err != nil {
 		return &repository.File{}, "", fmt.Errorf("reserve: %w", err)
@@ -199,11 +200,11 @@ func (s *FileService) ReserveUpload(ctx context.Context, name, contentType strin
 	return &file, url, nil
 }
 
-func (s *FileService) ConfirmUpload(ctx context.Context, id string, size int64, checksum string) (*repository.File, error) {
+func (s *FileService) ConfirmUpload(ctx context.Context, id string, size int64, checksum string, userID string) (*repository.File, error) {
 	if err := s.repo.ConfirmUpload(ctx, id, size, checksum); err != nil {
-		return &repository.File{}, err
+		return nil, err
 	}
-	return s.repo.GetByID(ctx, id) // fetch updated row
+	return s.repo.GetByID(ctx, id, userID)
 }
 
 func (s *FileService) PresignArchiveStore(ctx context.Context, path string, contentType string) (string, error) {
@@ -214,7 +215,6 @@ func (s *FileService) PresignArchiveFetch(ctx context.Context, path string) (str
 	return s.storage.PresignArchiveFetch(ctx, path, 15*time.Minute)
 }
 
-// helper
 type deleteOnClose struct {
 	*os.File
 	path string
@@ -227,6 +227,5 @@ func (d *deleteOnClose) Close() error {
 }
 
 func (s *FileService) makePath(id, filename string) string {
-	// Shard: /ab/cd/abcdef.../filename.jpg
 	return filepath.Join(id[:2], id[2:4], id, filename)
 }

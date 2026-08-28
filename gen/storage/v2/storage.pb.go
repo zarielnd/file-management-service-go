@@ -109,6 +109,7 @@ type FileInfo struct {
 	Filename      string                 `protobuf:"bytes,1,opt,name=filename,proto3" json:"filename,omitempty"`
 	ContentType   string                 `protobuf:"bytes,2,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
 	Size          int64                  `protobuf:"varint,3,opt,name=size,proto3" json:"size,omitempty"`
+	OwnerId       string                 `protobuf:"bytes,4,opt,name=owner_id,json=ownerId,proto3" json:"owner_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -162,6 +163,13 @@ func (x *FileInfo) GetSize() int64 {
 		return x.Size
 	}
 	return 0
+}
+
+func (x *FileInfo) GetOwnerId() string {
+	if x != nil {
+		return x.OwnerId
+	}
+	return ""
 }
 
 type UploadFileResponse struct {
@@ -356,6 +364,7 @@ type FileMetadata struct {
 	ContentType   string                 `protobuf:"bytes,4,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
 	Checksum      string                 `protobuf:"bytes,5,opt,name=checksum,proto3" json:"checksum,omitempty"`
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	OwnerId       string                 `protobuf:"bytes,7,opt,name=owner_id,json=ownerId,proto3" json:"owner_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -430,6 +439,13 @@ func (x *FileMetadata) GetCreatedAt() *timestamppb.Timestamp {
 		return x.CreatedAt
 	}
 	return nil
+}
+
+func (x *FileMetadata) GetOwnerId() string {
+	if x != nil {
+		return x.OwnerId
+	}
+	return ""
 }
 
 type ListFilesRequest struct {
@@ -1147,11 +1163,12 @@ const file_storage_v2_storage_proto_rawDesc = "" +
 	"\x04info\x18\x01 \x01(\v2\x14.storage.v2.FileInfoH\x00R\x04info\x12\x1f\n" +
 	"\n" +
 	"chunk_data\x18\x02 \x01(\fH\x00R\tchunkDataB\t\n" +
-	"\apayload\"]\n" +
+	"\apayload\"x\n" +
 	"\bFileInfo\x12\x1a\n" +
 	"\bfilename\x18\x01 \x01(\tR\bfilename\x12!\n" +
 	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\x12\x12\n" +
-	"\x04size\x18\x03 \x01(\x03R\x04size\"B\n" +
+	"\x04size\x18\x03 \x01(\x03R\x04size\x12\x19\n" +
+	"\bowner_id\x18\x04 \x01(\tR\aownerId\"B\n" +
 	"\x12UploadFileResponse\x12,\n" +
 	"\x04file\x18\x01 \x01(\v2\x18.storage.v2.FileMetadataR\x04file\" \n" +
 	"\x0eGetFileRequest\x12\x0e\n" +
@@ -1160,7 +1177,7 @@ const file_storage_v2_storage_proto_rawDesc = "" +
 	"\bmetadata\x18\x01 \x01(\v2\x18.storage.v2.FileMetadataR\bmetadata\x12\x12\n" +
 	"\x04data\x18\x02 \x01(\fR\x04data\"$\n" +
 	"\x12GetMetadataRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\xc0\x01\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\xdb\x01\n" +
 	"\fFileMetadata\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -1168,7 +1185,8 @@ const file_storage_v2_storage_proto_rawDesc = "" +
 	"\fcontent_type\x18\x04 \x01(\tR\vcontentType\x12\x1a\n" +
 	"\bchecksum\x18\x05 \x01(\tR\bchecksum\x129\n" +
 	"\n" +
-	"created_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"C\n" +
+	"created_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x19\n" +
+	"\bowner_id\x18\a \x01(\tR\aownerId\"C\n" +
 	"\x10ListFilesRequest\x12\x12\n" +
 	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x1b\n" +
 	"\tpage_size\x18\x02 \x01(\x05R\bpageSize\"Y\n" +

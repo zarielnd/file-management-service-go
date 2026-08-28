@@ -70,19 +70,19 @@ proto: ## Generate Go code from protobuf definitions
 # Docker
 # =============================================================================
 
-docker-up: ## Start docker compose
-	docker compose up
+up: ## Start docker compose
+	docker compose up -d
 
-docker-up-build: ## Build and start docker compose
+up-build: ## Build and start docker compose
 	docker compose up --build
 
-docker-down: ## Stop docker compose
+down: ## Stop docker compose
 	docker compose down
 
-docker-down-volumes: ## Stop and remove volumes
+down-v: ## Stop and remove volumes
 	docker compose down -v
 
-docker-build: ## Build docker images
+build: ## Build docker images
 	docker compose build
 
 # =============================================================================

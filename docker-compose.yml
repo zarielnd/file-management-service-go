@@ -48,6 +48,13 @@ services:
       USE_TEMPORAL_ARCHIVE: "${USE_TEMPORAL_ARCHIVE:-false}"
       TEMPORAL_HOST: "temporal:7233"
       TEMPORAL_QUEUE: "${TEMPORAL_QUEUE:-archive-queue}"
+
+      DATABASE_URL: "${DATABASE_URL}"
+      REDIS_ADDR: "${REDIS_ADDR}"
+      JWT_SECRET: "${JWT_SECRET}"
+      ACCESS_TOKEN_TTL_MINUTES: "${ACCESS_TOKEN_TTL_MINUTES}"
+      REFRESH_TOKEN_TTL_DAYS: "${REFRESH_TOKEN_TTL_DAYS}"
+      SERVICE_KEY: "${SERVICE_KEY}"
     depends_on:
       temporal:
         condition: service_started
@@ -64,6 +71,7 @@ services:
       STORAGE_GRPC_TARGET: "storage-service:50051"
       TEMPORAL_HOST: "temporal:7233"
       TEMPORAL_QUEUE: "${TEMPORAL_QUEUE:-archive-queue}"
+      SERVICE_KEY: "${SERVICE_KEY}"
     depends_on:
       temporal:
         condition: service_started
@@ -96,6 +104,8 @@ services:
       S3_ACCESS_KEY: "${S3_ACCESS_KEY}"
       S3_SECRET_KEY: "${S3_SECRET_KEY}"
       S3_USE_PATH_STYLE: "${S3_USE_PATH_STYLE}"
+
+      SERVICE_KEY: "${SERVICE_KEY}"
     volumes:
       - file-data:/data
     healthcheck:
@@ -159,6 +169,15 @@ services:
       mc ilm rule add local/${S3_ARCHIVE_BUCKET} --expire-days ${S3_ARCHIVE_EXPIRY_DAYS:-1} &&
       echo 'Archive bucket lifecycle: files expire after ${S3_ARCHIVE_EXPIRY_DAYS:-1} days'
       "
+  valkey:
+    image: valkey/valkey:latest
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
 volumes:
   file-data:

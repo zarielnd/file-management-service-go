@@ -5,15 +5,17 @@ import "net/http"
 type Code string
 
 const (
-	CodeInvalidRequest Code = "INVALID_REQUEST"
-	CodeFileNotFound   Code = "FILE_NOT_FOUND"
-	CodeFileTooLarge   Code = "FILE_TOO_LARGE"
-	CodeInternalError  Code = "INTERNAL_ERROR"
+	CodeInvalidRequest    Code = "INVALID_REQUEST"
+	CodeFileNotFound      Code = "FILE_NOT_FOUND"
+	CodeFileTooLarge      Code = "FILE_TOO_LARGE"
+	CodeInternalError     Code = "INTERNAL_ERROR"
+	CodeForbiddenError    Code = "FORBIDDEN"
+	CodeUnauthorizedError Code = "UNAUTHORIZED"
 )
 
-type Error struct  {
-	Code Code
-	Message string
+type Error struct {
+	Code       Code
+	Message    string
 	HTTPStatus int
 }
 
@@ -53,3 +55,18 @@ func Internal(message string) *Error {
 	}
 }
 
+func Forbidden(message string) *Error {
+	return &Error{
+		Code:       CodeForbiddenError,
+		Message:    message,
+		HTTPStatus: http.StatusForbidden,
+	}
+}
+
+func Unauthorized(message string) *Error {
+	return &Error{
+		Code:       CodeForbiddenError,
+		Message:    message,
+		HTTPStatus: http.StatusUnauthorized,
+	}
+}

@@ -1,24 +1,25 @@
 package activities
 
 type ResolvedFile struct {
-	FileID    string `json:"file_id"`
-	Name      string `json:"name"`
-	URL       string `json:"url"`
-	SizeBytes int64  `json:"size_bytes"`
+	FileID    string
+	Name      string
+	URL       string
+	SizeBytes int64
 }
 
 type DownloadFileInput struct {
-	URL      string `json:"url"`
-	TempPath string `json:"temp_path"`
+	URL      string
+	TempPath string
 }
 
 type ZipInput struct {
-	Files      []ResolvedFile `json:"files"`
-	TempDir    string         `json:"temp_dir"`
-	OutputPath string         `json:"output_path"`
+	Files      []ResolvedFile
+	TempDir    string
+	OutputPath string
 }
 
 type UploadArchiveInput struct {
-	ZipPath string `json:"zip_path"`
-	Name    string `json:"name"`
+	ZipPath string
+	Name    string
+	UserID  string // NEW
 }
