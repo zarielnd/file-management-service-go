@@ -14,6 +14,7 @@ import (
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/client/grpc"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/config"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/handler/file"
+	"github.com/zarielnd/file-management-service-go/services/file-server/internal/handler/file_ws"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/handler/health"
 	"github.com/zarielnd/file-management-service-go/services/file-server/internal/service"
 	temporalClient "go.temporal.io/sdk/client"
@@ -55,7 +56,7 @@ func main() {
 	fileSvc := service.NewFileService(storageClient, tc, cfg.TemporalQueue, cfg.MaxUploadSize)
 	fileHandler := file.NewFileHandler(fileSvc, cfg, cfg.MaxMultipartMemory)
 	healthHandler := health.NewHealthHandler()
-	archiveWS := file.NewArchiveWSHandler(tc, authSvc)
+	archiveWS := file_ws.NewArchiveWSHandler(tc, authSvc)
 
 	mux := http.NewServeMux()
 
