@@ -319,29 +319,28 @@ func TestFileHandler_List(t *testing.T) {
 
 func TestFileHandler_DownloadMultiple(t *testing.T) {
 	tests := []struct {
-		name      string
-		body      string
-		mockSetup func(*mocks.MockFileService)
-		wantCode  int
-		wantCT    string
-		wantCD    string
-		wantBody  string
+		name       string
+		body       string
+		mockSetup  func(*mocks.MockFileService)
+		wantCode   int
+		wantArchID string
+		wantWSEnd  string
 	}{
 		{
 			name: "success",
 			body: `{"file_ids":["1","2"]}`,
 			mockSetup: func(m *mocks.MockFileService) {
 				m.EXPECT().
-					DownloadMultiple(gomock.Any(), []string{"1", "2"}).
+					StartArchiveWorkflow(gomock.Any(), []string{"1", "2"}).
 					Return(
-						io.NopCloser(strings.NewReader("zipdata")),
+						"arch-123",
+						"wss://ws.example.com/arch-123",
 						nil,
 					)
 			},
-			wantCode: http.StatusOK,
-			wantCT:   "application/zip",
-			wantCD:   `attachment; filename="files.zip"`,
-			wantBody: "zipdata",
+			wantCode:   http.StatusAccepted,
+			wantArchID: "arch-123",
+			wantWSEnd:  "wss://ws.example.com/arch-123",
 		},
 		{
 			name:     "empty ids",
@@ -358,9 +357,10 @@ func TestFileHandler_DownloadMultiple(t *testing.T) {
 			body: `{"file_ids":["1"]}`,
 			mockSetup: func(m *mocks.MockFileService) {
 				m.EXPECT().
-					DownloadMultiple(gomock.Any(), []string{"1"}).
+					StartArchiveWorkflow(gomock.Any(), []string{"1"}).
 					Return(
-						nil,
+						"",
+						"",
 						errors.New("archive fail"),
 					)
 			},
@@ -400,36 +400,24 @@ func TestFileHandler_DownloadMultiple(t *testing.T) {
 				)
 			}
 
-			// Error cases don't need to check successful response headers/body.
-			if tt.wantCode != http.StatusOK {
+			// Error cases don't need to check successful response body.
+			if tt.wantCode != http.StatusAccepted {
 				return
 			}
 
-			// Assert Content-Type
-			if got := rr.Header().Get("Content-Type"); got != tt.wantCT {
-				t.Errorf(
-					"Content-Type = %q, want %q",
-					got,
-					tt.wantCT,
-				)
+			var resp struct {
+				ArchiveID  string `json:"archive_id"`
+				WSEndpoint string `json:"ws_endpoint"`
+			}
+			if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+				t.Fatal(err)
 			}
 
-			// Assert Content-Disposition
-			if got := rr.Header().Get("Content-Disposition"); got != tt.wantCD {
-				t.Errorf(
-					"Content-Disposition = %q, want %q",
-					got,
-					tt.wantCD,
-				)
+			if resp.ArchiveID != tt.wantArchID {
+				t.Errorf("archive_id = %q, want %q", resp.ArchiveID, tt.wantArchID)
 			}
-
-			// Assert response body
-			if got := rr.Body.String(); got != tt.wantBody {
-				t.Errorf(
-					"body = %q, want %q",
-					got,
-					tt.wantBody,
-				)
+			if resp.WSEndpoint != tt.wantWSEnd {
+				t.Errorf("ws_endpoint = %q, want %q", resp.WSEndpoint, tt.wantWSEnd)
 			}
 		})
 	}
