@@ -1,0 +1,186 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  REGION: asia-southeast1
+  GAR_LOCATION: asia-southeast1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/file-management
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports: ["5432:5432"]
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+      minio:
+        image: minio/minio:latest
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+        ports: ["9000:9000"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Run tests
+        run: go test ./...
+        env:
+          DATABASE_URL: postgres://test:test@localhost:5432/test?sslmode=disable
+          REDIS_ADDR: localhost:6379
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      file-server-tag: ${{ steps.meta-file-server.outputs.tag }}
+      storage-tag: ${{ steps.meta-storage.outputs.tag }}
+      worker-tag: ${{ steps.meta-worker.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SA_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: docker/login-action@v3
+        with:
+          registry: asia-southeast1-docker.pkg.dev
+          username: _token
+          password: ${{ steps.auth.outputs.access_token }}
+
+      - name: Build & Push file-server
+        id: meta-file-server
+        run: |
+          TAG=${{ env.GAR_LOCATION }}/file-server:${{ github.sha }}
+          docker build -f services/file-server/Dockerfile -t $TAG .
+          docker push $TAG
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Build & Push storage-service
+        id: meta-storage
+        run: |
+          TAG=${{ env.GAR_LOCATION }}/storage-service:${{ github.sha }}
+          docker build -f services/storage/Dockerfile -t $TAG .
+          docker push $TAG
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Build & Push worker
+        id: meta-worker
+        run: |
+          TAG=${{ env.GAR_LOCATION }}/worker:${{ github.sha }}
+          docker build -f services/file-server/Dockerfile.worker -t $TAG .
+          docker push $TAG
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+  migrate:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SA_EMAIL }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Run migrations
+        run: |
+          gcloud run jobs execute migrate --region ${{ env.REGION }} --wait || \
+          gcloud run jobs create migrate \
+            --image migrate/migrate:v4.17.1 \
+            --region ${{ env.REGION }} \
+            --command /migrate \
+            --args "-path,/migrations,-database,${{ secrets.DATABASE_URL }},up" \
+            --set-secrets DATABASE_URL=database-url:latest \
+            --execute
+
+  deploy:
+    needs: [build, migrate]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SA_EMAIL }}
+
+      - uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: file-server
+          region: ${{ env.REGION }}
+          image: ${{ needs.build.outputs.file-server-tag }}
+          env_vars: |
+            SERVER_PORT=8080
+            DEPLOYMENT_ENVIRONMENT=production
+            GOOGLE_CLOUD_PROJECT=${{ env.PROJECT_ID }}
+          secrets: |
+            DATABASE_URL=database-url:latest
+            REDIS_ADDR=redis-addr:latest
+            JWT_SECRET=jwt-secret:latest
+            SERVICE_KEY=service-key:latest
+            STORAGE_GRPC_TARGET=storage-grpc-target:latest
+
+      - uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: storage-service
+          region: ${{ env.REGION }}
+          image: ${{ needs.build.outputs.storage-tag }}
+          env_vars: |
+            GRPC_PORT=50051
+            DEPLOYMENT_ENVIRONMENT=production
+            GOOGLE_CLOUD_PROJECT=${{ env.PROJECT_ID }}
+            STORAGE_BACKEND=s3
+            S3_REGION=asia-southeast1
+          secrets: |
+            DATABASE_URL=database-url:latest
+            S3_ENDPOINT=s3-endpoint:latest
+            S3_ACCESS_KEY=s3-access-key:latest
+            S3_SECRET_KEY=s3-secret-key:latest
+            SERVICE_KEY=service-key:latest
+
+      - name: Deploy Worker Job
+        run: |
+          gcloud run jobs update worker \
+            --image ${{ needs.build.outputs.worker-tag }} \
+            --region ${{ env.REGION }} \
+            --max-retries 3 \
+            --set-env-vars TEMPORAL_HOST=${{ secrets.TEMPORAL_HOST }},TEMPORAL_QUEUE=archive-queue,GOOGLE_CLOUD_PROJECT=${{ env.PROJECT_ID }} \
+            --set-secrets SERVICE_KEY=service-key:latest,STORAGE_GRPC_TARGET=storage-grpc-target:latest \
+            || gcloud run jobs create worker \
+            --image ${{ needs.build.outputs.worker-tag }} \
+            --region ${{ env.REGION }} \
+            --max-retries 3 \
+            --set-env-vars TEMPORAL_HOST=${{ secrets.TEMPORAL_HOST }},TEMPORAL_QUEUE=archive-queue,GOOGLE_CLOUD_PROJECT=${{ env.PROJECT_ID }} \
+            --set-secrets SERVICE_KEY=service-key:latest,STORAGE_GRPC_TARGET=storage-grpc-target:latest

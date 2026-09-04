@@ -60,15 +60,13 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteError(w, apperror.Internal("failed to open upload"))
 			return
 		}
-
+		defer file.Close()
 		result, err := h.service.Upload(r.Context(), client.UploadInput{
 			Name:        fh.Filename,
 			ContentType: fh.Header.Get("Content-Type"),
 			Size:        fh.Size,
 			Content:     file,
 		})
-		file.Close()
-
 		if err != nil {
 			httpx.WriteError(w, err)
 			return

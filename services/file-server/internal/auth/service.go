@@ -93,7 +93,10 @@ func (s *Service) ValidateAccessToken(ctx context.Context, tokenString string) (
 		}
 		return s.jwtSecret, nil
 	})
-	if err != nil || !token.Valid {
+	if err != nil {
+		return "", fmt.Errorf("invalid token: %w", err)
+	}
+	if !token.Valid {
 		return "", fmt.Errorf("invalid token")
 	}
 

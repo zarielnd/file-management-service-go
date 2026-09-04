@@ -86,4 +86,20 @@ docker-compose.override.yml
 # =========================
 
 # Uncomment if protobuf files are generated during build
-# proto/**/*.pb.go
+# gen/storage/**/*.pb.
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+*.tfplan
+crash.log
+crash.*.log
+
+# Terraform override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

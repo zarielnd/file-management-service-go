@@ -27,7 +27,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
-
 	// ---- 2. Observability ----
 	shutdown, err := observability.Init(ctx, observability.InitOptions{
 		ServiceName:    "storage-service",

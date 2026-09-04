@@ -1,6 +1,9 @@
 .PHONY: all build test test-race fmt vet proto \
         up up-build down down-v \
-        d-build clean
+        d-build clean \
+		build-all push-all
+
+
 
 SERVICES := file-server storage
 
@@ -91,10 +94,77 @@ down-v: ## Stop and remove volumes
 
 d-build: ## Build docker images
 	docker compose build
-
 # =============================================================================
 # Cleanup
 # =============================================================================
 
 clean: ## Remove build artifacts
 	rm -rf bin/
+
+	# ------------------------------------------------------------------------------
+# Docker Build & Push Configuration
+# ------------------------------------------------------------------------------
+REGION     := asia-southeast1
+PROJECT_ID := project-bafc0d83-65e2-4477-9be
+REPOSITORY := file-management
+PLATFORM   := linux/amd64
+
+REGISTRY := $(REGION)-docker.pkg.dev/$(PROJECT_ID)/$(REPOSITORY)
+
+# ------------------------------------------------------------------------------
+# File Server
+# ------------------------------------------------------------------------------
+.PHONY: build-file-server push-file-server
+
+build-file-server:
+	docker buildx build \
+		--platform $(PLATFORM) \
+		-t $(REGISTRY)/file-server:latest \
+		-f services/file-server/Dockerfile \
+		.
+
+push-file-server: build-file-server
+	docker push $(REGISTRY)/file-server:latest
+	terraform -chdir=infra apply --auto-approve
+
+# ------------------------------------------------------------------------------
+# Storage Service
+# ------------------------------------------------------------------------------
+.PHONY: build-storage push-storage
+
+build-storage:
+	docker buildx build \
+		--platform $(PLATFORM) \
+		-t $(REGISTRY)/storage-service:latest \
+		-f services/storage/Dockerfile \
+		.
+
+push-storage: build-storage
+	docker push $(REGISTRY)/storage-service:latest
+	terraform -chdir=infra apply --auto-approve
+
+# ------------------------------------------------------------------------------
+# Temporal Worker
+# ------------------------------------------------------------------------------
+.PHONY: build-worker push-worker
+
+build-worker:
+	docker buildx build \
+		--platform $(PLATFORM) \
+		-t $(REGISTRY)/worker:latest \
+		-f services/file-server/Dockerfile.worker \
+		.
+
+push-worker: build-worker
+	docker push $(REGISTRY)/worker:latest
+	terraform -chdir=infra apply --auto-approve
+
+# ------------------------------------------------------------------------------
+# All-in-one Targets
+# ------------------------------------------------------------------------------
+.PHONY: build-all push-all
+
+build-all: build-file-server build-storage build-worker
+
+push-all: push-file-server push-storage push-worker
+	terraform -chdir=infra apply --auto-approve

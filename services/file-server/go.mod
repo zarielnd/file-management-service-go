@@ -26,6 +26,8 @@ require (
 	go.temporal.io/sdk/contrib/opentelemetry v0.8.1
 	go.uber.org/mock v0.6.0
 	golang.org/x/crypto v0.54.0
+	golang.org/x/oauth2 v0.36.0
+	google.golang.org/api v0.280.0
 )
 
 require (
@@ -69,10 +71,8 @@ require (
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.69.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
-	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
-	google.golang.org/api v0.280.0 // indirect
 	google.golang.org/genproto v0.0.0-20260519071638-aa98bba5eb94 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
 	google.golang.org/grpc v1.83.0 // indirect

@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
@@ -79,9 +81,9 @@ func main() {
 	}
 	defer closeConn()
 
-	tc, err := temporalClient.Dial(temporalClient.Options{HostPort: cfg.TemporalHost})
+	tc, err := NewTemporalClient(cfg)
 	if err != nil {
-		log.Fatalf("failed to connect to temporal: %v", err)
+		log.Fatalf("failed to connect to temporal cloud: %v", err)
 	}
 	defer tc.Close()
 
@@ -123,6 +125,38 @@ func main() {
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("failed to start server: %v", err)
 	}
+}
+
+func NewTemporalClient(cfg *config.Config) (temporalClient.Client, error) {
+	host := cfg.TemporalHost
+	apiKey := cfg.TemporalAPIKey
+	namespace := cfg.TemporalNamespace
+
+	if host == "" {
+		host = "temporal:7233"
+	}
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	opts := temporalClient.Options{
+		HostPort:  host,
+		Namespace: namespace,
+	}
+
+	// Temporal Cloud requires TLS
+	if apiKey != "" {
+		opts.ConnectionOptions = temporalClient.ConnectionOptions{
+			TLS: &tls.Config{},
+		}
+		opts.Credentials = temporalClient.NewAPIKeyStaticCredentials(apiKey)
+	}
+
+	c, err := temporalClient.Dial(opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to temporal: %w", err)
+	}
+	return c, nil
 }
 
 func stripTrailingSlash(next http.Handler) http.Handler {

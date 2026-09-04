@@ -1,9 +1,12 @@
 package observability
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -188,6 +191,25 @@ func (rr *responseRecorder) WriteHeader(code int) {
 	}
 }
 
+func (rr *responseRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := rr.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("response writer does not support hijacking")
+	}
+	return hijacker.Hijack()
+}
+
+func (rr *responseRecorder) Flush() {
+	if f, ok := rr.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+func (rr *responseRecorder) ReadFrom(r io.Reader) (int64, error) {
+	if rf, ok := rr.ResponseWriter.(io.ReaderFrom); ok {
+		return rf.ReadFrom(r)
+	}
+	return io.Copy(rr.ResponseWriter, r)
+}
 func HTTPMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Extract trace context from incoming headers so we link to file-server's trace

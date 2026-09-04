@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"fmt"
 	"log"
 	"log/slog"
 	"os"
@@ -44,9 +46,7 @@ func main() {
 
 	// ---- 3. Temporal client (no interceptors here) ----
 	// Temporal tracing is configured on the worker interceptor.
-	c, err := client.Dial(client.Options{
-		HostPort: cfg.TemporalHost,
-	})
+	c, err := NewTemporalClient(cfg)
 	if err != nil {
 		slog.ErrorContext(ctx, "failed to create temporal client", "error", err)
 		os.Exit(1)
@@ -88,4 +88,36 @@ func main() {
 		slog.ErrorContext(ctx, "worker failed", "error", err)
 		os.Exit(1)
 	}
+}
+
+func NewTemporalClient(cfg *config.Config) (client.Client, error) {
+	host := cfg.TemporalHost
+	apiKey := cfg.TemporalAPIKey
+	namespace := cfg.TemporalNamespace
+
+	if host == "" {
+		host = "temporal:7233"
+	}
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	opts := client.Options{
+		HostPort:  host,
+		Namespace: namespace,
+	}
+
+	// Temporal Cloud requires TLS
+	if apiKey != "" {
+		opts.ConnectionOptions = client.ConnectionOptions{
+			TLS: &tls.Config{},
+		}
+		opts.Credentials = client.NewAPIKeyStaticCredentials(apiKey)
+	}
+
+	c, err := client.Dial(opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to temporal: %w", err)
+	}
+	return c, nil
 }

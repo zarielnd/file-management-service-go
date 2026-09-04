@@ -14,12 +14,17 @@ type Config struct {
 	StorageGRPCTarget  string
 	MaxUploadSize      int64
 	MaxMultipartMemory int64
+
+	UseTemporalCloud   bool
 	UseTemporalArchive bool
 	TemporalHost       string
 	TemporalQueue      string
-	DatabaseURL        string
-	DatabaseName       string
-	RedisAddr          string
+	TemporalAPIKey     string
+	TemporalNamespace  string
+
+	DatabaseURL  string
+	DatabaseName string
+	RedisAddr    string
 	//auth
 	JWTSecret       string
 	ServiceKey      string
@@ -50,9 +55,13 @@ func Load() (*Config, error) {
 		StorageGRPCTarget:  getEnv("STORAGE_GRPC_TARGET", "localhost:50051"),
 		MaxUploadSize:      maxSize,
 		MaxMultipartMemory: maxMem,
+
+		UseTemporalCloud:   getEnv("USE_TEMPORAL_CLOUD", "false") == "true",
 		UseTemporalArchive: getEnv("USE_TEMPORAL_ARCHIVE", "false") == "true",
 		TemporalHost:       getEnv("TEMPORAL_HOST", "temporal:7233"),
 		TemporalQueue:      getEnv("TEMPORAL_QUEUE", "archive-queue"),
+		TemporalAPIKey:     getEnv("TEMPORAL_API_KEY", ""),
+		TemporalNamespace:  getEnv("TEMPORAL_NAMESPACE", "default"),
 		DatabaseURL:        getEnv("DATABASE_URL", ""),
 		DatabaseName:       getEnv("POSTGRES_DB", ""),
 		RedisAddr:          getEnv("REDIS_ADDR", "localhost:6379"),
