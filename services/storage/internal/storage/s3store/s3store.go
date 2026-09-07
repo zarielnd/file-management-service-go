@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -12,13 +13,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	storageMiddleware "github.com/zarielnd/file-management-service-go/services/storage/internal/middleware"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/aws/aws-sdk-go-v2/otelaws"
 )
 
 type Store struct {
-	client                *s3.Client        // internal SDK ops (actual HTTP to minio:9000)
-	internalPresignClient *s3.PresignClient // presigned URLs with minio:9000 (worker use)
-	externalPresignClient *s3.PresignClient // presigned URLs with localhost:9000 (browser use)
+	client                *s3.Client
+	internalPresignClient *s3.PresignClient
+	externalPresignClient *s3.PresignClient
 	bucket                string
 	archiveBucket         string
 	basePrefix            string
@@ -58,9 +60,10 @@ func NewStore(ctx context.Context, cfg Config) (*Store, error) {
 		o.UsePathStyle = cfg.UsePathStyle
 
 		if cfg.Endpoint != "" {
-			o.BaseEndpoint = aws.String(cfg.Endpoint)
+			o.BaseEndpoint = aws.String(strings.TrimRight(cfg.Endpoint, "/"))
 		}
 
+		o.APIOptions = append(o.APIOptions, storageMiddleware.GCSCompatibleHeaders)
 		// Add OpenTelemetry instrumentation.
 		otelaws.AppendMiddlewares(&o.APIOptions)
 	})
@@ -92,15 +95,14 @@ func NewStore(ctx context.Context, cfg Config) (*Store, error) {
 	// External client — only used for browser-facing presigned URLs.
 	externalS3Client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 		o.UsePathStyle = cfg.UsePathStyle
-
 		if cfg.PublicEndpoint != "" {
-			o.BaseEndpoint = aws.String(cfg.PublicEndpoint)
+			o.BaseEndpoint = aws.String(strings.TrimRight(cfg.PublicEndpoint, "/"))
 		} else if cfg.Endpoint != "" {
-			o.BaseEndpoint = aws.String(cfg.Endpoint)
+			o.BaseEndpoint = aws.String(strings.TrimRight(cfg.Endpoint, "/"))
 		}
-
 		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
 		o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
+		o.APIOptions = append(o.APIOptions, storageMiddleware.GCSCompatibleHeaders)
 	})
 
 	return &Store{

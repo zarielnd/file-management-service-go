@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -50,8 +51,8 @@ func Load() (*Config, error) {
 		S3Region:         getEnv("S3_REGION", "us-east-1"),
 		S3Bucket:         getEnv("S3_BUCKET", ""),
 		S3ArchiveBucket:  getEnv("S3_ARCHIVE_BUCKET", ""),
-		S3AccessKey:      getEnv("S3_ACCESS_KEY", ""),
-		S3SecretKey:      getEnv("S3_SECRET_KEY", ""),
+		S3AccessKey:      strings.TrimSpace(getEnv("S3_ACCESS_KEY", "")),
+		S3SecretKey:      strings.TrimSpace(getEnv("S3_SECRET_KEY", "")),
 		S3UsePathStyle:   getEnv("S3_USE_PATH_STYLE", "true") == "true",
 
 		DBConnectionString: getEnv("DATABASE_URL", ""),

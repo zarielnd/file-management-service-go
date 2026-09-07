@@ -1,0 +1,133 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+env:
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  REGION: asia-southeast1
+  REPOSITORY: file-management
+  REGISTRY: asia-southeast1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/file-management
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.5"
+          cache-dependency-path: |
+            go.work.sum
+            gen/go.sum
+            services/file-server/go.sum
+            services/storage/go.sum
+
+      - name: Run tests
+        run: |
+          make test
+        env:
+          DATABASE_URL: postgres://test:test@localhost:5432/test?sslmode=disable
+          REDIS_ADDR: localhost:6379
+
+  deploy:
+    name: Build & Deploy
+    needs: test
+
+    if: github.event_name == 'push'
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SA_EMAIL }}
+          token_format: access_token
+
+      - name: Login to Artifact Registry
+        uses: docker/login-action@v3
+        with:
+          registry: asia-southeast1-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: infra
+        run: terraform init
+
+      - name: Build images
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            -t $REGISTRY/file-server:latest \
+            -f services/file-server/Dockerfile \
+            .
+
+          docker buildx build \
+            --platform linux/amd64 \
+            -t $REGISTRY/storage-service:latest \
+            -f services/storage/Dockerfile \
+            .
+
+          docker buildx build \
+            --platform linux/amd64 \
+            -t $REGISTRY/worker:latest \
+            -f services/file-server/Dockerfile.worker \
+            .
+
+      - name: Push images
+        run: |
+          docker push $REGISTRY/file-server:latest
+          docker push $REGISTRY/storage-service:latest
+          docker push $REGISTRY/worker:latest
+
+      - name: Terraform Apply
+        working-directory: infra
+        run: |
+          terraform apply \
+            -auto-approve \
+            -input=false

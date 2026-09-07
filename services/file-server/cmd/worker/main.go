@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"fmt"
 	"log"
 	"log/slog"
+	"net/http"
 	"os"
 
 	connectrpc "github.com/zarielnd/file-management-service-go/services/file-server/internal/client/grpc"
@@ -44,9 +47,7 @@ func main() {
 
 	// ---- 3. Temporal client (no interceptors here) ----
 	// Temporal tracing is configured on the worker interceptor.
-	c, err := client.Dial(client.Options{
-		HostPort: cfg.TemporalHost,
-	})
+	c, err := NewTemporalClient(cfg)
 	if err != nil {
 		slog.ErrorContext(ctx, "failed to create temporal client", "error", err)
 		os.Exit(1)
@@ -83,9 +84,61 @@ func main() {
 		"queue", cfg.TemporalQueue,
 		"target", cfg.StorageGRPCTarget,
 	)
+	port := cfg.ServerPort
+	if port == "" {
+		port = "8080"
+	}
+
+	go func() {
+		mux := http.NewServeMux()
+
+		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("ok"))
+		})
+
+		slog.InfoContext(ctx, "health server starting", "port", port)
+
+		if err := http.ListenAndServe(":"+port, mux); err != nil {
+			slog.ErrorContext(ctx, "health server failed", "error", err)
+			os.Exit(1)
+		}
+	}()
 
 	if err := w.Run(worker.InterruptCh()); err != nil {
 		slog.ErrorContext(ctx, "worker failed", "error", err)
 		os.Exit(1)
 	}
+}
+
+func NewTemporalClient(cfg *config.Config) (client.Client, error) {
+	host := cfg.TemporalHost
+	apiKey := cfg.TemporalAPIKey
+	namespace := cfg.TemporalNamespace
+
+	if host == "" {
+		host = "temporal:7233"
+	}
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	opts := client.Options{
+		HostPort:  host,
+		Namespace: namespace,
+	}
+
+	// Temporal Cloud requires TLS
+	if apiKey != "" {
+		opts.ConnectionOptions = client.ConnectionOptions{
+			TLS: &tls.Config{},
+		}
+		opts.Credentials = client.NewAPIKeyStaticCredentials(apiKey)
+	}
+
+	c, err := client.Dial(opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to temporal: %w", err)
+	}
+	return c, nil
 }

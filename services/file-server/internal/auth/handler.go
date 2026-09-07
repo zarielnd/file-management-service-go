@@ -105,8 +105,8 @@ func setAuthCookies(w http.ResponseWriter, access, refresh string) {
 		Name:     "access_token",
 		Value:    access,
 		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteStrictMode,
+		Secure:   true,
+		SameSite: http.SameSiteNoneMode,
 		Path:     "/",
 		MaxAge:   900,
 	})
@@ -114,8 +114,8 @@ func setAuthCookies(w http.ResponseWriter, access, refresh string) {
 		Name:     "refresh_token",
 		Value:    refresh,
 		HttpOnly: true,
-		Secure:   false,
-		SameSite: http.SameSiteStrictMode,
+		Secure:   true,
+		SameSite: http.SameSiteNoneMode,
 		Path:     "/",
 		MaxAge:   604800,
 	})

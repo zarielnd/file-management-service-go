@@ -10,6 +10,8 @@ import (
 
 	"connectrpc.com/connect"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"golang.org/x/oauth2"
+	"google.golang.org/api/idtoken"
 
 	storagev2 "github.com/zarielnd/file-management-service-go/gen/storage/v2"
 	storagev2connect "github.com/zarielnd/file-management-service-go/gen/storage/v2/storagev2connect"
@@ -22,17 +24,57 @@ type storageClient struct {
 	serviceKey string
 }
 
+type authTransport struct {
+	base       http.RoundTripper
+	source     oauth2.TokenSource
+	serviceKey string
+}
+
+func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	token, err := t.source.Token()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get auth token: %w", err)
+	}
+
+	req = req.Clone(req.Context())
+	// This is the magic line that satisfies Cloud Run's "Require authentication"
+	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+
+	// Keep your custom app-level auth too
+	if t.serviceKey != "" {
+		req.Header.Set("X-Service-Key", t.serviceKey)
+	}
+
+	if userID := client.UserIDFromContext(req.Context()); userID != "" {
+		req.Header.Set("X-User-Id", userID)
+	}
+
+	return t.base.RoundTrip(req)
+}
+
 func NewStorageClient(target, serviceKey string) (client.StorageClient, func() error, error) {
-	tr := &http.Transport{}
-	tr.Protocols = new(http.Protocols)
-	tr.Protocols.SetUnencryptedHTTP2(true)
+
+	ts, err := idtoken.NewTokenSource(context.Background(), target)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create token source: %w", err)
+	}
+
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+
+	// Wrap OTel transport with our Auth transport
+	baseTransport := otelhttp.NewTransport(tr)
+	authedTransport := &authTransport{
+		base:       baseTransport,
+		source:     ts,
+		serviceKey: serviceKey,
+	}
 
 	httpClient := &http.Client{
-		Transport: otelhttp.NewTransport(tr),
+		Transport: authedTransport,
 	}
 
 	c := &storageClient{
-		client:     storagev2connect.NewStorageServiceClient(httpClient, normalizeTarget(target)),
+		client:     storagev2connect.NewStorageServiceClient(httpClient, target),
 		serviceKey: serviceKey,
 	}
 
@@ -40,22 +82,17 @@ func NewStorageClient(target, serviceKey string) (client.StorageClient, func() e
 }
 
 func normalizeTarget(target string) string {
+	target = strings.TrimRight(target, "/")
+
 	if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") {
 		return target
 	}
-	return "http://" + target
-}
-
-func setAuthHeader(h http.Header, ctx context.Context, serviceKey string) {
-	h.Set("X-Service-Key", serviceKey)
-	if userID := client.UserIDFromContext(ctx); userID != "" {
-		h.Set("X-User-Id", userID)
-	}
+	// Default to HTTPS for production (Cloud Run)
+	return "https://" + target
 }
 
 func (c *storageClient) Store(ctx context.Context, input client.UploadInput) (domain.File, error) {
 	stream := c.client.UploadFile(ctx)
-	setAuthHeader(stream.RequestHeader(), ctx, c.serviceKey)
 
 	if err := stream.Send(&storagev2.UploadFileRequest{
 		Payload: &storagev2.UploadFileRequest_Info{
@@ -97,7 +134,6 @@ func (c *storageClient) Store(ctx context.Context, input client.UploadInput) (do
 
 func (c *storageClient) Fetch(ctx context.Context, id string) (io.ReadCloser, domain.File, error) {
 	req := connect.NewRequest(&storagev2.GetFileRequest{Id: id})
-	setAuthHeader(req.Header(), ctx, c.serviceKey)
 
 	stream, err := c.client.GetFile(ctx, req)
 	if err != nil {
@@ -143,7 +179,6 @@ func (c *storageClient) Fetch(ctx context.Context, id string) (io.ReadCloser, do
 
 func (c *storageClient) Metadata(ctx context.Context, id string) (domain.File, error) {
 	req := connect.NewRequest(&storagev2.GetMetadataRequest{Id: id})
-	setAuthHeader(req.Header(), ctx, c.serviceKey)
 
 	resp, err := c.client.GetMetadata(ctx, req)
 	if err != nil {
@@ -157,7 +192,6 @@ func (c *storageClient) List(ctx context.Context, page, pageSize int) ([]domain.
 		Page:     int32(page),
 		PageSize: int32(pageSize),
 	})
-	setAuthHeader(req.Header(), ctx, c.serviceKey)
 
 	resp, err := c.client.ListFiles(ctx, req)
 	if err != nil {
@@ -173,7 +207,6 @@ func (c *storageClient) List(ctx context.Context, page, pageSize int) ([]domain.
 
 func (c *storageClient) DownloadArchive(ctx context.Context, ids []string) (io.ReadCloser, error) {
 	req := connect.NewRequest(&storagev2.DownloadArchiveRequest{FileIds: ids})
-	setAuthHeader(req.Header(), ctx, c.serviceKey)
 
 	stream, err := c.client.DownloadArchive(ctx, req)
 	if err != nil {
@@ -199,7 +232,6 @@ func (c *storageClient) DownloadArchive(ctx context.Context, ids []string) (io.R
 
 func (c *storageClient) GetDownloadURLs(ctx context.Context, ids []string) ([]client.DownloadURL, error) {
 	req := connect.NewRequest(&storagev2.GetDownloadURLsRequest{FileIds: ids})
-	setAuthHeader(req.Header(), ctx, c.serviceKey)
 
 	resp, err := c.client.GetDownloadURLs(ctx, req)
 	if err != nil {
@@ -223,7 +255,6 @@ func (c *storageClient) GetUploadURL(ctx context.Context, filename, contentType 
 		Filename:    filename,
 		ContentType: contentType,
 	})
-	setAuthHeader(req.Header(), ctx, c.serviceKey)
 
 	resp, err := c.client.GetUploadURL(ctx, req)
 	if err != nil {
@@ -241,7 +272,6 @@ func (c *storageClient) ConfirmUpload(ctx context.Context, fileID string, size i
 		SizeBytes: size,
 		Checksum:  checksum,
 	})
-	setAuthHeader(req.Header(), ctx, c.serviceKey)
 
 	resp, err := c.client.ConfirmUpload(ctx, req)
 	if err != nil {
@@ -255,7 +285,6 @@ func (c *storageClient) GetArchiveUploadURL(ctx context.Context, path, contentTy
 		Path:        path,
 		ContentType: contentType,
 	})
-	setAuthHeader(req.Header(), ctx, c.serviceKey)
 
 	resp, err := c.client.GetArchiveUploadURL(ctx, req)
 	if err != nil {
@@ -266,7 +295,6 @@ func (c *storageClient) GetArchiveUploadURL(ctx context.Context, path, contentTy
 
 func (c *storageClient) GetArchiveDownloadURL(ctx context.Context, path string) (string, error) {
 	req := connect.NewRequest(&storagev2.GetArchiveDownloadURLRequest{Path: path})
-	setAuthHeader(req.Header(), ctx, c.serviceKey)
 
 	resp, err := c.client.GetArchiveDownloadURL(ctx, req)
 	if err != nil {
