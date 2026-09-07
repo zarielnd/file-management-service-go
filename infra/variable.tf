@@ -48,18 +48,3 @@ variable "refresh_token_ttl" {
   type      = string
   sensitive = true
 }
-
-variable "file_server_image" {
-  description = "Docker image for file-server"
-  type        = string
-}
-
-variable "storage_image" {
-  description = "Docker image for storage-service"
-  type        = string
-}
-
-variable "worker_image" {
-  description = "Docker image for Temporal worker"
-  type        = string
-}
