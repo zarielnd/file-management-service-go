@@ -83,6 +83,9 @@ jobs:
       TF_VAR_temporal_api_key: ${{ secrets.TEMPORAL_API_KEY }}
       TF_VAR_temporal_namespace: ${{ secrets.TEMPORAL_NAMESPACE }}
 
+      TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
+      TF_VAR_service_key: ${{ secrets.SERVICE_KEY }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
