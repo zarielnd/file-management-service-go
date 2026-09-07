@@ -55,8 +55,7 @@ jobs:
             services/storage/go.sum
 
       - name: Run tests
-        run: |
-          make test
+        run: make test
         env:
           DATABASE_URL: postgres://test:test@localhost:5432/test?sslmode=disable
           REDIS_ADDR: localhost:6379
@@ -72,6 +71,17 @@ jobs:
     permissions:
       contents: read
       id-token: write
+
+    env:
+      TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}
+      TF_VAR_region: asia-southeast1
+
+      TF_VAR_access_token_ttl: ${{ secrets.ACCESS_TOKEN_TTL }}
+      TF_VAR_refresh_token_ttl: ${{ secrets.REFRESH_TOKEN_TTL }}
+
+      TF_VAR_temporal_host: ${{ secrets.TEMPORAL_HOST }}
+      TF_VAR_temporal_api_key: ${{ secrets.TEMPORAL_API_KEY }}
+      TF_VAR_temporal_namespace: ${{ secrets.TEMPORAL_NAMESPACE }}
 
     steps:
       - name: Checkout
