@@ -10,6 +10,10 @@ terraform {
       version = "~> 3.0"
     }
   }
+  backend "gcs" {
+    bucket = "project-bafc0d83-65e2-4477-9be-terraform-state"
+    prefix = "file-management"
+  }
 }
 
 provider "google" {
