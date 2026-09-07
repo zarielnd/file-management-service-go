@@ -501,38 +501,47 @@ resource "google_cloud_run_v2_job" "migrate" {
 # ------------------------------------------------------------------------------
 # 11. Cloud Run Job - Worker
 # ------------------------------------------------------------------------------
-resource "google_cloud_run_v2_job" "worker" {
+resource "google_cloud_run_v2_service" "worker" {
   name     = "worker"
   location = var.region
 
   template {
-    template {
-      service_account = google_service_account.app.email
-      containers {
-        image = "${var.region}-docker.pkg.dev/${var.project_id}/file-management/worker:latest"
-        env {
-          name  = "TEMPORAL_QUEUE"
-          value = "archive-queue"
+    service_account = google_service_account.app.email
+
+    scaling {
+      min_instance_count = 1
+      max_instance_count = 1
+    }
+
+    containers {
+      image = "${var.region}-docker.pkg.dev/${var.project_id}/file-management/worker:latest"
+
+      env {
+        name  = "TEMPORAL_QUEUE"
+        value = "archive-queue"
+      }
+
+      env {
+        name  = "GOOGLE_CLOUD_PROJECT"
+        value = var.project_id
+      }
+
+      dynamic "env" {
+        for_each = {
+          "SERVICE_KEY"         = "service-key"
+          "TEMPORAL_HOST"       = "temporal-host"
+          "TEMPORAL_API_KEY"    = "temporal-api-key"
+          "TEMPORAL_NAMESPACE"  = "temporal-namespace"
+          "STORAGE_GRPC_TARGET" = "storage-grpc-target"
         }
-        env {
-          name  = "GOOGLE_CLOUD_PROJECT"
-          value = var.project_id
-        }
-        dynamic "env" {
-          for_each = {
-            "SERVICE_KEY"         = "service-key"
-            "TEMPORAL_HOST"       = "temporal-host"
-            "TEMPORAL_API_KEY"    = "temporal-api-key"
-            "TEMPORAL_NAMESPACE"  = "temporal-namespace"
-            "STORAGE_GRPC_TARGET" = "storage-grpc-target"
-          }
-          content {
-            name = env.key
-            value_source {
-              secret_key_ref {
-                secret  = env.value
-                version = "latest"
-              }
+
+        content {
+          name = env.key
+
+          value_source {
+            secret_key_ref {
+              secret  = env.value
+              version = "latest"
             }
           }
         }
@@ -540,5 +549,7 @@ resource "google_cloud_run_v2_job" "worker" {
     }
   }
 
-  depends_on = [google_project_service.apis]
+  depends_on = [
+    google_project_service.apis
+  ]
 }
