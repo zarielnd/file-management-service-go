@@ -105,7 +105,7 @@ clean: ## Remove build artifacts
 # Docker Build & Push Configuration
 # ------------------------------------------------------------------------------
 REGION     := asia-southeast1
-PROJECT_ID := project-bafc0d83-65e2-4477-9be
+PROJECT_ID ?= $(shell gcloud config get-value project 2>/dev/null)
 REPOSITORY := file-management
 PLATFORM   := linux/amd64
 
@@ -125,7 +125,6 @@ build-file-server:
 
 push-file-server: build-file-server
 	docker push $(REGISTRY)/file-server:latest
-	terraform -chdir=infra apply --auto-approve
 
 # ------------------------------------------------------------------------------
 # Storage Service
@@ -141,7 +140,6 @@ build-storage:
 
 push-storage: build-storage
 	docker push $(REGISTRY)/storage-service:latest
-	terraform -chdir=infra apply --auto-approve
 
 # ------------------------------------------------------------------------------
 # Temporal Worker
@@ -157,7 +155,6 @@ build-worker:
 
 push-worker: build-worker
 	docker push $(REGISTRY)/worker:latest
-	terraform -chdir=infra apply --auto-approve
 
 # ------------------------------------------------------------------------------
 # All-in-one Targets
