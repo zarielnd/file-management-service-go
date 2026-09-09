@@ -46,3 +46,30 @@ Thumbs.db
 
 # Dependencies (downloaded inside container)
 vendor/
+
+# Infrastructure (Terraform state, secrets, provider cache)
+infra/
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+*.lock.hcl
+
+# CI/CD (not needed in production images)
+.github/
+
+# Go workspace (breaks module-based Docker builds)
+go.work
+go.work.sum
+
+# Build tooling (not needed at runtime)
+Makefile
+buf.gen.yaml
+
+# Scripts (unless they are container entrypoints)
+scripts/
+
+# Root-level terraform state (I see one at root in your tree)
+terraform.tfstate
+terraform.tfstate.*
