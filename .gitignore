@@ -103,3 +103,43 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.astro/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+bun-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+
+# Vercel
+.vercel/
+
+# Netlify
+.netlify/
+
+# Local env / secrets
+*.local
+
+# TypeScript
+*.tsbuildinfo

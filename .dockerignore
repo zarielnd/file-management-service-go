@@ -44,6 +44,8 @@ Thumbs.db
 # Logs
 *.log
 
+apps/web/
+
 # Dependencies (downloaded inside container)
 vendor/
 
