@@ -40,21 +40,21 @@ resource "google_project_service" "apis" {
 }
 
 # ------------------------------------------------------------------------------
-# 2. Service Account
+# 2. Service Account (least privilege)
 # ------------------------------------------------------------------------------
 resource "google_service_account" "app" {
   account_id   = "file-management-app"
   display_name = "File Management App"
 }
 
+# Project-level roles. Storage access is NOT granted here: it is scoped to the
+# two buckets below instead of the whole project.
 resource "google_project_iam_member" "app_roles" {
   for_each = toset([
     "roles/cloudtrace.agent",
     "roles/monitoring.metricWriter",
     "roles/cloudsql.client",
     "roles/secretmanager.secretAccessor",
-    "roles/storage.objectAdmin",
-    "roles/storage.admin",
     "roles/artifactregistry.reader",
     "roles/vpcaccess.user"
   ])
@@ -63,16 +63,17 @@ resource "google_project_iam_member" "app_roles" {
   member  = "serviceAccount:${google_service_account.app.email}"
 }
 
-
-resource "google_storage_bucket_iam_member" "files_bucket_reader" {
+# Bucket-scoped object access (replaces storage.admin, storage.objectAdmin at
+# project level, and legacyBucketOwner).
+resource "google_storage_bucket_iam_member" "files_bucket_object_admin" {
   bucket = google_storage_bucket.files.name
-  role   = "roles/storage.legacyBucketOwner"
+  role   = "roles/storage.objectAdmin"
   member = "serviceAccount:${google_service_account.app.email}"
 }
 
-resource "google_storage_bucket_iam_member" "archives_bucket_reader" {
+resource "google_storage_bucket_iam_member" "archives_bucket_object_admin" {
   bucket = google_storage_bucket.archives.name
-  role   = "roles/storage.legacyBucketOwner"
+  role   = "roles/storage.objectAdmin"
   member = "serviceAccount:${google_service_account.app.email}"
 }
 
@@ -103,10 +104,10 @@ resource "google_sql_database_instance" "main" {
     tier = "db-f1-micro"
     ip_configuration {
       ipv4_enabled = true
-      authorized_networks {
-        name  = "allow-all-temporarily"
-        value = "0.0.0.0/0"
-      }
+      # No authorized_networks: nothing can reach the instance directly.
+      # Cloud Run connects through the Cloud SQL connector (unix socket,
+      # IAM-authorized via roles/cloudsql.client), which needs no allow-list.
+      ssl_mode = "ENCRYPTED_ONLY"
     }
     backup_configuration {
       enabled = true
@@ -184,7 +185,6 @@ resource "random_password" "service_key" {
   special = false
 }
 
-
 resource "google_storage_hmac_key" "app" {
   service_account_email = google_service_account.app.email
 }
@@ -200,6 +200,9 @@ resource "google_secret_manager_secret_version" "s3_secret_key" {
 }
 
 locals {
+  # Unix-socket connection through the Cloud SQL connector. sslmode=disable is
+  # fine here: the socket is local to the container and the connector encrypts
+  # the hop to the instance.
   db_url = "postgres://${google_sql_user.app.name}:${random_password.db_root.result}@/file_management?host=/cloudsql/${google_sql_database_instance.main.connection_name}&sslmode=disable"
 }
 
@@ -260,19 +263,20 @@ resource "google_secret_manager_secret_version" "refresh_token_ttl" {
   secret      = google_secret_manager_secret.secrets["refresh-token-ttl"].id
   secret_data = var.refresh_token_ttl
 }
+
 resource "google_secret_manager_secret_version" "temporal_host" {
   secret      = google_secret_manager_secret.secrets["temporal-host"].id
-  secret_data = var.temporal_host # replace with yours
+  secret_data = var.temporal_host
 }
 
 resource "google_secret_manager_secret_version" "temporal_api_key" {
   secret      = google_secret_manager_secret.secrets["temporal-api-key"].id
-  secret_data = var.temporal_api_key # replace with yours
+  secret_data = var.temporal_api_key
 }
 
 resource "google_secret_manager_secret_version" "temporal_namespace" {
   secret      = google_secret_manager_secret.secrets["temporal-namespace"].id
-  secret_data = var.temporal_namespace # replace with yours
+  secret_data = var.temporal_namespace
 }
 
 # ------------------------------------------------------------------------------
@@ -358,7 +362,11 @@ resource "google_cloud_run_service" "storage" {
         "run.googleapis.com/cloudsql-instances"   = google_sql_database_instance.main.connection_name
         "run.googleapis.com/vpc-access-connector" = google_vpc_access_connector.connector.name
         "run.googleapis.com/vpc-access-egress"    = "private-ranges-only"
-        "run.googleapis.com/ingress"              = "all"
+        # Ingress stays "all" on purpose: the file server and worker reach this
+        # service through its run.app URL over the public path, so "internal"
+        # would reject them. Access is restricted by the invoker IAM binding
+        # below (no allUsers) plus SERVICE_KEY, so anonymous callers get 403.
+        "run.googleapis.com/ingress" = "all"
       }
     }
   }
@@ -368,14 +376,14 @@ resource "google_cloud_run_service" "storage" {
     latest_revision = true
   }
 
-  depends_on = [google_project_service.apis, ]
+  depends_on = [google_project_service.apis]
 }
 
 resource "google_cloud_run_service_iam_member" "storage_invoker" {
   service  = google_cloud_run_service.storage.name
   location = google_cloud_run_service.storage.location
   role     = "roles/run.invoker"
-  member   = "serviceAccount:${google_service_account.app.email}" # Internal services still need auth via SERVICE_KEY
+  member   = "serviceAccount:${google_service_account.app.email}"
 }
 
 # ------------------------------------------------------------------------------
@@ -463,10 +471,10 @@ resource "google_cloud_run_service" "file_server" {
     latest_revision = true
   }
 
-  depends_on = [google_cloud_run_service.storage,
+  depends_on = [
+    google_cloud_run_service.storage,
     google_secret_manager_secret_version.access_token_ttl,
     google_secret_manager_secret_version.refresh_token_ttl,
-    # Also add the other secrets this service uses so Terraform knows the order:
     google_secret_manager_secret_version.database_url,
     google_secret_manager_secret_version.jwt_secret,
     google_secret_manager_secret_version.service_key,
@@ -491,10 +499,26 @@ resource "google_cloud_run_v2_job" "migrate" {
   template {
     template {
       service_account = google_service_account.app.email
+
+      # Attach the Cloud SQL instance so the /cloudsql/... socket path in
+      # db_url exists inside the job container. Without this the job could only
+      # connect over the public IP, which is now closed.
+      volumes {
+        name = "cloudsql"
+        cloud_sql_instance {
+          instances = [google_sql_database_instance.main.connection_name]
+        }
+      }
+
       containers {
         image   = "${var.region}-docker.pkg.dev/${var.project_id}/file-management/migrate:latest"
         command = ["/migrate"]
         args    = ["-path", "/migrations", "-database", local.db_url, "up"]
+
+        volume_mounts {
+          name       = "cloudsql"
+          mount_path = "/cloudsql"
+        }
       }
     }
   }
@@ -503,7 +527,7 @@ resource "google_cloud_run_v2_job" "migrate" {
 }
 
 # ------------------------------------------------------------------------------
-# 11. Cloud Run Job - Worker
+# 11. Cloud Run Service - Temporal Worker (always on, min = max = 1)
 # ------------------------------------------------------------------------------
 resource "google_cloud_run_v2_service" "worker" {
   name     = "worker"
