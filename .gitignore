@@ -143,3 +143,4 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
+gha-creds-*.json
